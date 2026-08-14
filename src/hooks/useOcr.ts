@@ -15,11 +15,17 @@ export function useOcr(opts: {
   guide: Rect | null
   onDetected: (code: string) => void
   onStatus?: (status: ScanStatus) => void
+  validate?: (code: string) => boolean
+  scale?: number
 }) {
   const onDetectedRef = useRef(opts.onDetected)
   onDetectedRef.current = opts.onDetected
   const onStatusRef = useRef(opts.onStatus)
   onStatusRef.current = opts.onStatus
+  const validateRef = useRef(opts.validate)
+  validateRef.current = opts.validate
+  const scaleRef = useRef(opts.scale)
+  scaleRef.current = opts.scale
 
   useEffect(() => {
     if (!opts.enabled || !opts.guide) return
@@ -67,7 +73,7 @@ export function useOcr(opts: {
         }
       }
 
-      const canvas = preprocessRegion(video, opts.guide, 3)
+      const canvas = preprocessRegion(video, opts.guide, scaleRef.current ?? 2)
       if (canvas) {
         try {
           const { digits, confidence } = await recognizeDigits(canvas)
@@ -79,6 +85,10 @@ export function useOcr(opts: {
             progress: 1,
           })
           if (/^\d{5}$/.test(digits)) {
+            if (validateRef.current?.(digits)) {
+              onDetectedRef.current(digits)
+              return
+            }
             if (digits === last) {
               onDetectedRef.current(digits)
               return
@@ -91,7 +101,7 @@ export function useOcr(opts: {
           // ignore a bad frame and keep scanning
         }
       }
-      timer = window.setTimeout(tick, 800)
+      timer = window.setTimeout(tick, 350)
     }
 
     tick()

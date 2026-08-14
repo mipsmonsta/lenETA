@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCamera } from '../hooks/useCamera'
 import { useOcr, type ScanStatus } from '../hooks/useOcr'
 import { containerBoxToVideoRect, type Rect } from '../lib/preprocessing'
+import { loadStops } from '../lib/stops'
+import type { Stop } from '../types'
 
 export default function ScanScreen({
   onDetected,
@@ -16,6 +18,7 @@ export default function ScanScreen({
   const { videoRef, active, error, start } = useCamera()
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 })
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
+  const [stops, setStops] = useState<Map<string, Stop> | null>(null)
   const [status, setStatus] = useState<ScanStatus>({
     reading: '',
     confidence: 0,
@@ -26,6 +29,18 @@ export default function ScanScreen({
   useEffect(() => {
     start()
   }, [start])
+
+  useEffect(() => {
+    let active = true
+    loadStops()
+      .then((map) => {
+        if (active) setStops(map)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     const el = wrapRef.current
@@ -69,6 +84,8 @@ export default function ScanScreen({
     guide,
     onDetected,
     onStatus: setStatus,
+    validate: (code) => stops?.has(code) ?? false,
+    scale: 2,
   })
 
   return (

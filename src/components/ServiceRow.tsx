@@ -9,9 +9,7 @@ export default function ServiceRow({
   now: number
 }) {
   const { no, operator } = service
-  const arrivals = [service.next, service.subsequent, service.next2, service.next3].filter(
-    (a) => a != null,
-  )
+  const arrivals = [service.next, service.next2, service.next3].filter((a) => a != null)
   const hasDd = arrivals.some((a) => a.type === 'DD')
   const hasBd = arrivals.some((a) => a.type === 'BD')
   const hasWab = arrivals.some((a) => a.feature?.includes('WAB'))
