@@ -1,4 +1,4 @@
-import { formatEta, LOAD_LABELS, OPERATOR_LABELS } from '../lib/arrivals'
+import { averageHeadwayMinutes, formatEta, LOAD_LABELS, OPERATOR_LABELS } from '../lib/arrivals'
 import type { ArriveLahService } from '../types'
 
 export default function ServiceRow({
@@ -14,6 +14,7 @@ export default function ServiceRow({
   const hasBd = arrivals.some((a) => a.type === 'BD')
   const hasWab = arrivals.some((a) => a.feature?.includes('WAB'))
   const next = service.next
+  const headway = averageHeadwayMinutes(service)
 
   return (
     <li className="service">
@@ -39,6 +40,11 @@ export default function ServiceRow({
         )}
         {next?.load && <div className="load">{LOAD_LABELS[next.load]}</div>}
       </div>
+      {headway != null && (
+        <div className="service-headway">
+          {headway === 0 ? 'Bus Bunching' : `~${headway} min headway`}
+        </div>
+      )}
     </li>
   )
 }

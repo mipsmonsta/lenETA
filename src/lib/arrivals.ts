@@ -34,6 +34,17 @@ export function formatEta(
   return `${mins} min`
 }
 
+export function averageHeadwayMinutes(service: ArriveLahService): number | null {
+  const times = [service.next, service.next2, service.next3]
+    .map((a) => (a?.time ? Date.parse(a.time) : NaN))
+    .filter((t) => !Number.isNaN(t))
+    .sort((a, b) => a - b)
+  if (times.length < 2) return null
+  const gaps = []
+  for (let i = 1; i < times.length; i++) gaps.push(times[i] - times[i - 1])
+  return Math.round(gaps.reduce((s, g) => s + g, 0) / gaps.length / 60000)
+}
+
 export function sortServices(
   services: ArriveLahService[],
   now = Date.now(),
