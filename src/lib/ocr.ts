@@ -1,40 +1,52 @@
-import { createWorker, PSM, type Worker } from 'tesseract.js'
-
-const FAST_LANG_PATH = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0'
-
-let workerPromise: Promise<Worker> | null = null
-
-export function initOcr(onProgress?: (progress: number) => void): Promise<Worker> {
-  if (!workerPromise) {
-    workerPromise = createWorker('eng', 1, {
-      logger: (m) => {
-        if (m.status === 'recognizing text' && onProgress) {
-          onProgress(m.progress)
-        }
-      },
-      langPath: FAST_LANG_PATH,
-      cacheMethod: 'indexeddb',
-    }).then(async (worker) => {
-      await worker.setParameters({
-        tessedit_char_whitelist: '0123456789',
-        tessedit_pageseg_mode: PSM.SINGLE_LINE,
-      })
-      return worker
-    })
-  }
-  return workerPromise
-}
+import { loadModel, predict, type DigitCnnModel } from './digitcnn'
+import { segmentDigits, normalizeCell } from './segment'
+import type { BinaryImage } from './preprocessing'
 
 export interface OcrResult {
   digits: string
   confidence: number
+  probs: number[]
 }
 
-export async function recognizeDigits(
-  canvas: HTMLCanvasElement,
-): Promise<OcrResult> {
-  const worker = await initOcr()
-  const { data } = await worker.recognize(canvas)
-  const digits = (data.text ?? '').replace(/[^\d]/g, '')
-  return { digits, confidence: data.confidence }
+let modelPromise: Promise<DigitCnnModel> | null = null
+
+export function initOcr(
+  onProgress?: (progress: number) => void,
+): Promise<DigitCnnModel> {
+  if (!modelPromise) {
+    onProgress?.(0)
+    modelPromise = loadModel()
+    modelPromise.then(() => onProgress?.(1)).catch(() => {})
+  }
+  return modelPromise
+}
+
+/**
+ * Segment a binarized crop into digit cells, classify each with the CNN, and
+ * return the 5-digit code with its mean confidence. Returns null when the
+ * frame cannot be segmented into exactly five cells.
+ */
+export function recognizeDigits(
+  model: DigitCnnModel,
+  bin: BinaryImage,
+): OcrResult | null {
+  const segs = segmentDigits(bin)
+  if (!segs || segs.length !== 5) return null
+
+  const digits: number[] = []
+  const probs: number[] = []
+  let conf = 0
+  for (const s of segs) {
+    const cell = normalizeCell(bin, s.x, s.y, s.width, s.height)
+    if (!cell) return null
+    const p = predict(model, cell)
+    let best = 0
+    for (let i = 1; i < p.length; i++) {
+      if (p[i] > p[best]) best = i
+    }
+    digits.push(best)
+    probs.push(p[best])
+    conf += p[best]
+  }
+  return { digits: digits.join(''), confidence: conf / 5, probs }
 }

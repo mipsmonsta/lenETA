@@ -211,6 +211,18 @@ button {
   pointer-events: none;
 }
 
+.ocr-preview {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 112px;
+  height: auto;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
 .camera-error {
   position: absolute;
   inset: 0;

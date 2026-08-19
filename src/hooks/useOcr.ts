@@ -1,13 +1,22 @@
 import { useEffect, useRef } from 'react'
 import { initOcr, recognizeDigits } from '../lib/ocr'
-import { preprocessRegion, type Rect } from '../lib/preprocessing'
+import {
+  binarizeRegion,
+  binToCanvas,
+  type Rect,
+} from '../lib/preprocessing'
 
 export interface ScanStatus {
   reading: string
   confidence: number
   loading: boolean
   progress: number
+  preview?: HTMLCanvasElement | null
 }
+
+const VOTE_WINDOW = 4
+const VOTE_NEEDED = 2
+const CONFIDENCE_GATE = 0.75
 
 export function useOcr(opts: {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -16,7 +25,6 @@ export function useOcr(opts: {
   onDetected: (code: string) => void
   onStatus?: (status: ScanStatus) => void
   validate?: (code: string) => boolean
-  scale?: number
 }) {
   const onDetectedRef = useRef(opts.onDetected)
   onDetectedRef.current = opts.onDetected
@@ -24,16 +32,18 @@ export function useOcr(opts: {
   onStatusRef.current = opts.onStatus
   const validateRef = useRef(opts.validate)
   validateRef.current = opts.validate
-  const scaleRef = useRef(opts.scale)
-  scaleRef.current = opts.scale
 
   useEffect(() => {
     if (!opts.enabled || !opts.guide) return
 
     let cancelled = false
     let timer: number | undefined
-    let workerReady = false
-    let last = ''
+    let modelReady = false
+    const recent: string[] = []
+
+    const emit = (status: ScanStatus) => {
+      if (!cancelled) onStatusRef.current?.(status)
+    }
 
     const tick = async () => {
       if (cancelled) return
@@ -42,28 +52,17 @@ export function useOcr(opts: {
         timer = window.setTimeout(tick, 500)
         return
       }
-      if (!workerReady) {
-        onStatusRef.current?.({
-          reading: '',
-          confidence: 0,
-          loading: true,
-          progress: 0,
-        })
+
+      if (!modelReady) {
+        emit({ reading: '', confidence: 0, loading: true, progress: 0 })
         try {
           await initOcr((p) => {
-            if (!cancelled) {
-              onStatusRef.current?.({
-                reading: '',
-                confidence: 0,
-                loading: true,
-                progress: p,
-              })
-            }
+            emit({ reading: '', confidence: 0, loading: true, progress: p })
           })
-          workerReady = true
+          modelReady = true
         } catch {
-          onStatusRef.current?.({
-            reading: 'OCR failed to load',
+          emit({
+            reading: 'OCR failed to load — retrying…',
             confidence: 0,
             loading: false,
             progress: 0,
@@ -73,35 +72,65 @@ export function useOcr(opts: {
         }
       }
 
-      const canvas = preprocessRegion(video, opts.guide, scaleRef.current ?? 2)
-      if (canvas) {
-        try {
-          const { digits, confidence } = await recognizeDigits(canvas)
-          if (cancelled) return
-          onStatusRef.current?.({
-            reading: digits || 'No code detected',
-            confidence,
-            loading: false,
-            progress: 1,
-          })
-          if (/^\d{5}$/.test(digits)) {
-            if (validateRef.current?.(digits)) {
-              onDetectedRef.current(digits)
-              return
-            }
-            if (digits === last) {
-              onDetectedRef.current(digits)
-              return
-            }
-            last = digits
-          } else {
-            last = ''
-          }
-        } catch {
-          // ignore a bad frame and keep scanning
-        }
+      const bin = binarizeRegion(video, opts.guide)
+      if (!bin) {
+        emit({ reading: 'No code detected', confidence: 0, loading: false, progress: 1 })
+        timer = window.setTimeout(tick, 400)
+        return
       }
-      timer = window.setTimeout(tick, 350)
+
+      try {
+        const model = await initOcr()
+        const result = recognizeDigits(model, bin)
+        if (cancelled) return
+
+        let reading = 'No code detected'
+        let confidence = 0
+        let match = false
+
+        if (result) {
+          reading = result.digits
+          confidence = result.confidence
+          if (
+            /^\d{5}$/.test(result.digits) &&
+            result.confidence >= CONFIDENCE_GATE
+          ) {
+            if (validateRef.current?.(result.digits)) {
+              onDetectedRef.current(result.digits)
+              return
+            }
+            recent.push(result.digits)
+            if (recent.length > VOTE_WINDOW) recent.shift()
+            const count = recent.reduce(
+              (n, d) => (d === result.digits ? n + 1 : n),
+              0,
+            )
+            match = count >= VOTE_NEEDED
+          }
+        }
+
+        emit({
+          reading,
+          confidence,
+          loading: false,
+          progress: 1,
+          preview: import.meta.env.DEV ? binToCanvas(bin) : undefined,
+        })
+
+        if (match) {
+          const code = recent[recent.length - 1]
+          onDetectedRef.current(code)
+          return
+        }
+      } catch {
+        emit({
+          reading: 'OCR error — retrying…',
+          confidence: 0,
+          loading: false,
+          progress: 0,
+        })
+      }
+      timer = window.setTimeout(tick, 400)
     }
 
     tick()

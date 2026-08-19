@@ -44,15 +44,6 @@ export default defineConfig({
               expiration: { maxEntries: 50, maxAgeSeconds: 300 },
             },
           },
-          {
-            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/(@tesseract\.js-data|tesseract\.js-core|tesseract\.js)/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'ocr-models',
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
         ],
       },
       devOptions: { enabled: false },

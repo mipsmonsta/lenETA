@@ -15,6 +15,7 @@ export default function ScanScreen({
   onClose: () => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<HTMLCanvasElement | null>(null)
   const { videoRef, active, error, start } = useCamera()
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 })
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
@@ -85,8 +86,16 @@ export default function ScanScreen({
     onDetected,
     onStatus: setStatus,
     validate: (code) => stops?.has(code) ?? false,
-    scale: 2,
   })
+
+  useEffect(() => {
+    if (status.preview && previewRef.current) {
+      const c = previewRef.current
+      c.width = status.preview.width
+      c.height = status.preview.height
+      c.getContext('2d')?.drawImage(status.preview, 0, 0)
+    }
+  }, [status.preview])
 
   return (
     <div className="screen scan-screen">
@@ -102,6 +111,9 @@ export default function ScanScreen({
           }}
         />
         {box && <div className="guide-box" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
+        {import.meta.env.DEV && (
+          <canvas ref={previewRef} className="ocr-preview" />
+        )}
 
         {error ? (
           <div className="camera-error">
@@ -124,7 +136,15 @@ export default function ScanScreen({
               </>
             ) : (
               <span>
-                {status.reading ? `Reading: ${status.reading}` : 'Align the bus stop code in the box'}
+                {status.reading ? (
+                  <>
+                    Reading: {status.reading}
+                    {status.confidence > 0 &&
+                      ` · ${Math.round(status.confidence * 100)}%`}
+                  </>
+                ) : (
+                  'Align the bus stop code in the box'
+                )}
               </span>
             )}
           </div>

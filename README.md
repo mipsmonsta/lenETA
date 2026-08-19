@@ -8,8 +8,9 @@ GitHub Pages. No backend, no API keys.
 
 ## Features
 
-- **Camera scan** — point at the bus stop code; Tesseract.js OCR (in-browser,
-  digits only) reads the 5-digit code.
+- **Camera scan** — point at the bus stop code; the app crops the guide box,
+  adaptively binarizes it, segments the five digits, and classifies each with a
+  tiny on-device CNN (bundled, no network).
 - **Manual entry** — numeric keypad fallback when the camera or OCR fails.
 - **Live arrivals** — real-time ETAs via the ArriveLah proxy of LTA DataMall
   (free, CORS-enabled, refreshed every 30s).
@@ -32,6 +33,8 @@ Useful scripts:
 
 ```bash
 npm run stops        # refresh public/stops.json from cheeaun/sgbusdata
+npm run train:digits # retrain the digit CNN (Python 3.12 + numpy + Pillow)
+npm run test         # unit tests (CNN inference + segmentation)
 npm run build        # typecheck + build to dist/
 npm run preview      # serve the production build
 npm run lint         # oxlint
@@ -59,11 +62,13 @@ PWA.
 
 ## How it works
 
-- **Scan**: `getUserMedia` starts the rear camera. Every ~0.8s a frame is
-  cropped to the on-screen guide box, binarized and upscaled, then run through
-  a digits-only Tesseract worker. The same 5-digit code must appear on two
-  consecutive frames before it is accepted, then it is validated against the
-  stop dataset.
+- **Scan**: `getUserMedia` starts the rear camera. Every ~0.4s a frame is
+  cropped to the on-screen guide box, binarized with an adaptive threshold, and
+  the five digits are located by column projection. Each digit is normalized to
+  a 28×28 cell and classified by a small CNN (~100K params, int8-quantized,
+  ~0.5 MB) that runs directly in JS — no OCR engine download. The same 5-digit
+  code must be detected in at least 2 of the last 4 frames before it is
+  accepted, then it is validated against the stop dataset.
 - **Arrivals**: the stop code is sent to `https://arrivelah2.busrouter.sg/?id=…`
   (cheeaun's open-source proxy of LTA's DataMall `BusArrival` API, cached 15s).
 - **Stop names**: `public/stops.json` is generated from
@@ -72,8 +77,10 @@ PWA.
 
 ## Caveats
 
-- The first scan downloads the Tesseract model (~4MB) from jsDelivr; it is then
-  cached in IndexedDB and by the service worker, so later scans work offline.
+- The digit CNN is trained offline from synthetic digit renders (bold system
+  fonts, rotation/blur/noise augmentation) by `npm run train:digits`, which
+  writes the quantized model to `public/models/digit_cnn.json`. It is bundled
+  and precached by the service worker, so scanning works fully offline.
 - ArriveLah is a shared, free service — the app shows loading/error/retry
   states if it is unreachable.
 - The LTA BusArrival API only returns buses currently in operation, so a stop
