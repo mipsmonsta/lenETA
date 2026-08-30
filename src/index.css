@@ -214,8 +214,8 @@ button {
 .ocr-preview {
   position: absolute;
   right: 8px;
-  top: 8px;
-  width: 100px;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  width: 96px;
   height: auto;
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 6px;
@@ -226,11 +226,14 @@ button {
 .scan-debug {
   position: absolute;
   left: 8px;
-  top: 8px;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
   z-index: 3;
-  width: 240px;
-  max-width: calc(100% - 124px);
-  background: rgba(5, 15, 30, 0.85);
+  width: 236px;
+  max-width: calc(100% - 120px);
+  max-height: 55vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(5, 15, 30, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 8px;
   padding: 8px 10px;
@@ -246,6 +249,7 @@ button {
   gap: 6px;
   margin-bottom: 4px;
   justify-content: space-between;
+  flex: none;
 }
 .debug-save-alt {
   background: #445;
@@ -270,6 +274,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  overflow-y: auto;
+  max-height: calc(55vh - 34px);
 }
 .scan-debug-rows b {
   font-family: var(--mono);
