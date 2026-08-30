@@ -57,31 +57,30 @@ export default function ScanScreen({
     return () => ro.disconnect()
   }, [])
 
-  const guide = useMemo(() => {
-    if (!containerSize.w || !containerSize.h || !videoSize.w) return null
-    const b: Rect = {
-      x: containerSize.w * 0.12,
-      y: containerSize.h * 0.3,
-      width: containerSize.w * 0.76,
-      height: containerSize.h * 0.28,
+  // Guide box geometry (fraction of the on-screen container), memoized. A
+  // short, wide strip so it hugs a single line of the 5-digit code instead of
+  // grabbing several rows of the poster (which flooded the crop with thin
+  // text rows and made binarization pick a noise band).
+  const box: Rect | null = useMemo(() => {
+    if (!containerSize.w || !containerSize.h) return null
+    return {
+      x: containerSize.w * 0.1,
+      y: containerSize.h * 0.42,
+      width: containerSize.w * 0.8,
+      height: containerSize.h * 0.12,
     }
+  }, [containerSize])
+
+  const guide = useMemo(() => {
+    if (!box || !videoSize.w) return null
     return containerBoxToVideoRect(
       videoSize.w,
       videoSize.h,
       containerSize.w,
       containerSize.h,
-      b,
+      box,
     )
-  }, [videoSize, containerSize])
-
-  const box: Rect | null = containerSize.w && containerSize.h
-    ? {
-        x: containerSize.w * 0.12,
-        y: containerSize.h * 0.3,
-        width: containerSize.w * 0.76,
-        height: containerSize.h * 0.28,
-      }
-    : null
+  }, [videoSize, containerSize, box])
 
   useOcr({
     videoRef,

@@ -49,8 +49,18 @@ export function selectTextBand(bin: BinaryImage): { y0: number; y1: number } | n
     }
   }
   if (start >= 0) bands.push({ y0: start, y1: last + 1, ink })
+
+  // A real 5-digit row has meaningful vertical extent. Reject single/very
+  // thin noise bands (these were capturing faint 1px horizontal lines and
+  // feeding empty/blank cells to the CNN). Sort by ink, then pick the first
+  // band that is at least ~9% of crop height (>=5px). If none qualify, fall
+  // back to the TALLEST band (a better shape prior than a thin dense line).
+  const minH = Math.max(5, Math.round(h * 0.09))
   bands.sort((a, b) => b.ink - a.ink)
-  const best = bands[0]
+  let best = bands.find((b) => b.y1 - b.y0 >= minH)
+  if (!best) {
+    best = bands.slice().sort((a, b) => (b.y1 - b.y0) - (a.y1 - a.y0))[0]
+  }
   return best ? { y0: best.y0, y1: best.y1 } : null
 }
 

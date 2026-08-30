@@ -72,6 +72,38 @@ describe('segmentation', () => {
     const strip: BinaryImage = { data: new Uint8Array(100), width: 10, height: 10 }
     expect(segmentDigits(strip)).toBeNull()
   })
+
+  it('prefers a tall digit row over a thin 1px noise line', () => {
+    // Build a canvas with a 1px-tall noise line across the top and a real
+    // (tall) digit strip lower down.
+    const strip = makeStrip([4, 4, 0, 0, 9])
+    const width = strip.width
+    const noiseTop = 3
+    const digitTop = 40
+    const height = digitTop + strip.height + 20
+    const data = new Uint8Array(width * height)
+
+    // Copy the digit strip into [digitTop, ...)
+    for (let y = 0; y < strip.height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (strip.data[y * width + x]) data[(digitTop + y) * width + x] = 1
+      }
+    }
+    // Add a thin noise line spanning most of the width at noiseTop.
+    for (let x = 0; x < width; x += 3) data[noiseTop * width + x] = 1
+
+    const band = selectTextBand({ data, width, height })
+    expect(band).not.toBeNull()
+    // Expect the chosen band to be over the tall digit strip region (well
+    // below the 1px noise line at noiseTop=3), not the noise row itself.
+    expect(band!.y1).toBeGreaterThan(digitTop)
+    expect(band!.y0).toBeGreaterThan(noiseTop + 5)
+    expect(band!.y1 - band!.y0).toBeGreaterThan(20)
+
+    const segs = segmentDigits({ data, width, height })
+    expect(segs).not.toBeNull()
+    expect(segs!.length).toBe(5)
+  })
 })
 
 describe('segmentation + CNN end to end (real rendered rows)', () => {
