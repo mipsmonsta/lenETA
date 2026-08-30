@@ -18,8 +18,21 @@ export interface OcrResult {
 export interface OcrDiagnostic {
   /** Number of digit columns found before/after heuristics, or null if unusable. */
   segmentCount: number | null
-  /** Why segmentation/reco produced nothing (last failing stage). */
-  failReason?: 'no-band' | 'seg-not-5' | 'empty-cell' | null
+  /**
+   * Why no usable digit string came out. Stages in order the pipeline checks:
+   * - 'low-contrast' | 'no-ink'   binarization rejected the crop
+   * - 'no-band'                   binarized but no horizontal text row found
+   * - 'seg-not-5'                 band found but not exactly 5 columns
+   * - 'empty-cell'                a digit cell normalized to no ink
+   * - null                        segmentation OK (classification handled later)
+   */
+  failReason?:
+    | 'low-contrast'
+    | 'no-ink'
+    | 'no-band'
+    | 'seg-not-5'
+    | 'empty-cell'
+    | null
 }
 
 let modelPromise: Promise<DigitCnnModel> | null = null

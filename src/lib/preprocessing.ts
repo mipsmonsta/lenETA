@@ -12,25 +12,46 @@ export interface BinaryImage {
   height: number
 }
 
+/** Why binarization produced no usable crop (dev diagnostics). */
+export type BinarizeFail =
+  | 'empty-rect'
+  | 'no-canvas'
+  | 'low-contrast'
+  | 'no-ink'
+  | null
+
 /**
- * Extract the region inside `rect` of the current video frame, convert to
- * grayscale, and binarize with an adaptive (local-mean) threshold so it is
- * robust to shadows, glare and background content. The result is auto-inverted
- * so ink is always dark-on-light, then denoised with a small morphological open.
- * Returns null if the region is empty or has too little contrast.
+ * Extract the region inside `rect` of the current video frame, binarize it,
+ * and report the success/failure. Wrapper of `binarizeRegionWithReason`.
  */
 export function binarizeRegion(
   video: HTMLVideoElement,
   rect: Rect,
 ): BinaryImage | null {
+  return binarizeRegionWithReason(video, rect).bin
+}
+
+/**
+ * Binarize the guide-box crop and say *why* it failed when it did, so the dev
+ * diagnostics can tell low-contrast captures apart from genuinely empty ones.
+ *
+ * Contrast gate is intentionally loose; when the adaptive threshold yields
+ * almost no ink we fall back to a simple global (Otsu-ish) threshold so thin
+ * or low-contrast real-world digits still survive. Returns null only when the
+ * crop itself is unreadable.
+ */
+export function binarizeRegionWithReason(
+  video: HTMLVideoElement,
+  rect: Rect,
+): { bin: BinaryImage | null; reason: BinarizeFail } {
   const { x, y, width, height } = rect
-  if (width <= 0 || height <= 0) return null
+  if (width <= 0 || height <= 0) return { bin: null, reason: 'empty-rect' }
 
   const src = document.createElement('canvas')
   src.width = width
   src.height = height
   const sctx = src.getContext('2d', { willReadFrequently: true })
-  if (!sctx) return null
+  if (!sctx) return { bin: null, reason: 'no-canvas' }
   sctx.drawImage(video, x, y, width, height, 0, 0, width, height)
 
   const img = sctx.getImageData(0, 0, width, height)
@@ -38,25 +59,42 @@ export function binarizeRegion(
   const gray = new Uint8Array(width * height)
   let min = 255
   let max = 0
+  let sum = 0
   for (let i = 0, p = 0; i < d.length; i += 4, p++) {
     const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
     gray[p] = g
     if (g < min) min = g
     if (g > max) max = g
+    sum += g
   }
-  if (max - min < 24) return null
+  // Very permissive, but still reject a truly uniform/unreadable crop.
+  if (max - min < 12) return { bin: null, reason: 'low-contrast' }
 
   let bin = adaptiveThreshold(gray, width, height)
+  let ink = countInk(bin)
 
-  let ink = 0
-  for (let i = 0; i < bin.length; i++) ink += bin[i]
-  if (ink < 6) return null
-  if (ink > width * height / 2) {
-    bin = invert(bin)
+  if (ink < 6) {
+    // Adaptive threshold failed (low contrast): fall back to a global
+    // threshold so thin/dim real digits are still picked up.
+    const th = sum / gray.length
+    bin = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bin[i] = gray[i] < th * 0.92 ? 1 : 0
+    ink = countInk(bin)
   }
+  if (ink < 6) return { bin: null, reason: 'no-ink' }
+  if (ink > width * height / 2) bin = invert(bin)
 
+  // Use a gentler open (single erode+dilate of thin structures) so that
+  // real digit strokes aren't wiped out entirely. Only erode away isolated
+  // specks while preserving connected text.
   bin = morphOpen(bin, width, height)
-  return { data: bin, width, height }
+  return { bin: { data: bin, width, height }, reason: null }
+}
+
+function countInk(bin: Uint8Array): number {
+  let n = 0
+  for (let i = 0; i < bin.length; i++) n += bin[i]
+  return n
 }
 
 /**
@@ -101,16 +139,24 @@ function invert(bin: Uint8Array): Uint8Array {
   return out
 }
 
-/** 3x3 morphological open (erode then dilate) to remove isolated specks. */
+/**
+ * Gentle morphological open (erode with a 4-neighbourhood cross, then dilate
+ * with a 3x3). The cross erosion only removes isolated specks — pixels whose
+ * horizontal AND vertical neighbours are all empty — while a 3x3 erosion would
+ * have wiped out thin real-world digit strokes entirely. Widening this back to
+ * a 3x3-open was a silent cause of "no-band" on real bus-stop text.
+ */
 function morphOpen(bin: Uint8Array, w: number, h: number): Uint8Array {
   const eroded = new Uint8Array(w * h)
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x
+      // Keep a pixel only if it has an inked horizontal and vertical
+      // neighbour (i.e. is not an isolated speck). Thin strokes survive.
       if (
-        bin[i - w - 1] && bin[i - w] && bin[i - w + 1] &&
-        bin[i - 1] && bin[i] && bin[i + 1] &&
-        bin[i + w - 1] && bin[i + w] && bin[i + w + 1]
+        bin[i] &&
+        ((bin[i - 1] && bin[i + 1]) || // horizontal line
+          (bin[i - w] && bin[i + w]))   // vertical line
       ) {
         eroded[i] = 1
       }

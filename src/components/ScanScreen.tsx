@@ -180,7 +180,10 @@ export default function ScanScreen({
                 </span>
               </span>
               <span>
-                Fail stage: <b>{status.diagnostic?.failReason ?? '—'}</b>
+                Fail stage:{' '}
+                <span className={failStageClass(status.diagnostic?.failReason)}>
+                  <b>{failStageLabel(status.diagnostic?.failReason)}</b>
+                </span>
               </span>
             </div>
           </div>
@@ -256,4 +259,28 @@ function rleEncode(data: Uint8Array): number[] {
   }
   out.push(prev, run)
   return out
+}
+
+/** Human-readable label + CSS class for the OCR fail stage. */
+function failStageLabel(reason: string | null | undefined): string {
+  switch (reason) {
+    case 'low-contrast':
+      return 'LOW CONTRAST (binarizer rejected crop)'
+    case 'no-ink':
+      return 'NO INK (binarizer empty)'
+    case 'no-band':
+      return 'NO TEXT ROW (no-band)'
+    case 'seg-not-5':
+      return 'NOT 5 DIGITS (seg-not-5)'
+    case 'empty-cell':
+      return 'EMPTY CELL'
+    default:
+      return reason ?? '—'
+  }
+}
+
+function failStageClass(reason: string | null | undefined): string {
+  return reason && !['seg-not-5', 'empty-cell'].includes(reason)
+    ? 'dbg-bad'
+    : 'dbg-warn'
 }

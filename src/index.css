@@ -277,6 +277,9 @@ button {
 .dbg-bad {
   color: #ff6b6b;
 }
+.dbg-warn {
+  color: #ffd166;
+}
 
 .camera-error {
   position: absolute;

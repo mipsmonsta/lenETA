@@ -6,10 +6,11 @@ import {
   type OcrDiagnostic,
 } from '../lib/ocr'
 import {
-  binarizeRegion,
+  binarizeRegionWithReason,
   binToCanvas,
   type Rect,
   type BinaryImage,
+  type BinarizeFail,
 } from '../lib/preprocessing'
 import type { Segment } from '../lib/segment'
 import { ENABLE_OCR_DEBUG } from '../lib/debug'
@@ -194,6 +195,24 @@ export function useOcr(opts: {
  * so the debug panel can explain a null recognition even when binarization
  * passed but column-projection segmentation did not.
  */
+/** Map a binarize failure to the shared diagnostic label. */
+function binarizeFailLabel(reason: BinarizeFail): OcrDiagnostic['failReason'] {
+  switch (reason) {
+    case 'low-contrast':
+      return 'low-contrast'
+    case 'no-ink':
+      return 'no-ink'
+    default:
+      return 'no-band'
+  }
+}
+
+/**
+ * Binarize the guide-box region and, when the frame is usable, run
+ * segmentation diagnostics. Returns the binary crop (for the CNN/debug
+ * preview), the final 5 digit boxes, and the diagnostic summary, including a
+ * real failure label for each stage (binarize -> band -> segment).
+ */
 function runDiagnostic(
   video: HTMLVideoElement,
   guide: Rect,
@@ -202,12 +221,12 @@ function runDiagnostic(
   boxes: Segment[] | null
   diagnostic: OcrDiagnostic
 } {
-  const bin = binarizeRegion(video, guide)
+  const { bin, reason } = binarizeRegionWithReason(video, guide)
   if (!bin) {
     return {
       bin2: null,
       boxes: null,
-      diagnostic: { segmentCount: null, failReason: 'no-band' },
+      diagnostic: { segmentCount: null, failReason: binarizeFailLabel(reason) },
     }
   }
   const diag = segmentDigitsDiagnostic(bin)
