@@ -1,17 +1,47 @@
 import { useEffect, useRef } from 'react'
-import { initOcr, recognizeDigits } from '../lib/ocr'
+import {
+  initOcr,
+  recognizeDigits,
+  segmentDigitsDiagnostic,
+  type OcrDiagnostic,
+} from '../lib/ocr'
 import {
   binarizeRegion,
   binToCanvas,
   type Rect,
+  type BinaryImage,
 } from '../lib/preprocessing'
+import type { Segment } from '../lib/segment'
+import { ENABLE_OCR_DEBUG } from '../lib/debug'
 
 export interface ScanStatus {
   reading: string
   confidence: number
   loading: boolean
   progress: number
+  /** DEV-only: binarized preview canvas. */
   preview?: HTMLCanvasElement | null
+  /** DEV-only: boxes of the 5 segmented digits in crop coordinates. */
+  boxes?: Segment[] | null
+  /** DEV-only: diagnosis of the current frame. */
+  diagnostic?: OcrDiagnostic
+  /** DEV-only: per-digit classifier confidence (0..1). */
+  perDigitConf?: number[]
+}
+
+/**
+ * DEV-only: holds the latest frame data ref for the debug panel / save button.
+ * Populated every OCR tick when diagnostics are enabled.
+ */
+export interface OcrDebugHandle {
+  /** Latest binarized crop, or null when no usable frame yet. */
+  bin: BinaryImage | null
+  /** Boxes (crop coords) of the 5 digits, or null. */
+  boxes: Segment[] | null
+}
+
+export const DEBUG_REFS: { current: OcrDebugHandle } = {
+  current: { bin: null, boxes: null },
 }
 
 const VOTE_WINDOW = 4
@@ -72,12 +102,24 @@ export function useOcr(opts: {
         }
       }
 
-      const bin = binarizeRegion(video, opts.guide)
+      const { diagnostic, boxes, bin2 } = runDiagnostic(video, opts.guide)
+      const bin = bin2
       if (!bin) {
-        emit({ reading: 'No code detected', confidence: 0, loading: false, progress: 1 })
+        emit({
+          reading: 'No code detected',
+          confidence: 0,
+          loading: false,
+          progress: 1,
+          boxes: null,
+          diagnostic: {
+            segmentCount: null,
+            failReason: diagnostic?.failReason ?? 'no-band',
+          },
+        })
         timer = window.setTimeout(tick, 400)
         return
       }
+      DEBUG_REFS.current = { bin, boxes }
 
       try {
         const model = await initOcr()
@@ -87,6 +129,7 @@ export function useOcr(opts: {
         let reading = 'No code detected'
         let confidence = 0
         let match = false
+        const perDigitConf: number[] = result?.probs ?? []
 
         if (result) {
           reading = result.digits
@@ -114,7 +157,10 @@ export function useOcr(opts: {
           confidence,
           loading: false,
           progress: 1,
-          preview: import.meta.env.DEV ? binToCanvas(bin) : undefined,
+          preview: ENABLE_OCR_DEBUG ? binToCanvas(bin) : undefined,
+          boxes,
+          diagnostic,
+          perDigitConf,
         })
 
         if (match) {
@@ -139,4 +185,35 @@ export function useOcr(opts: {
       if (timer) window.clearTimeout(timer)
     }
   }, [opts.enabled, opts.guide, opts.videoRef])
+}
+
+/**
+ * Binarize the guide-box region and, when the frame is usable, run
+ * segmentation diagnostics. Returns the binary crop (for the CNN/debug
+ * preview), the final 5 digit boxes, and the diagnostic summary. This exists
+ * so the debug panel can explain a null recognition even when binarization
+ * passed but column-projection segmentation did not.
+ */
+function runDiagnostic(
+  video: HTMLVideoElement,
+  guide: Rect,
+): {
+  bin2: BinaryImage | null
+  boxes: Segment[] | null
+  diagnostic: OcrDiagnostic
+} {
+  const bin = binarizeRegion(video, guide)
+  if (!bin) {
+    return {
+      bin2: null,
+      boxes: null,
+      diagnostic: { segmentCount: null, failReason: 'no-band' },
+    }
+  }
+  const diag = segmentDigitsDiagnostic(bin)
+  return {
+    bin2: bin,
+    boxes: diag.segs,
+    diagnostic: { segmentCount: diag.segmentCount, failReason: diag.failReason },
+  }
 }

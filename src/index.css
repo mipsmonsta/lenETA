@@ -215,12 +215,67 @@ button {
   position: absolute;
   right: 8px;
   top: 8px;
-  width: 112px;
+  width: 100px;
   height: auto;
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 6px;
   opacity: 0.85;
   pointer-events: none;
+}
+
+.scan-debug {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 3;
+  width: 240px;
+  max-width: calc(100% - 124px);
+  background: rgba(5, 15, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #e6eef7;
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: auto;
+}
+.scan-debug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.scan-debug-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px;
+  color: var(--accent);
+}
+.debug-save {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.scan-debug-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.scan-debug-rows b {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.dbg-ok {
+  color: #2ee66a;
+}
+.dbg-bad {
+  color: #ff6b6b;
 }
 
 .camera-error {

@@ -8,6 +8,7 @@
     "build": "node scripts/gen-icons.mjs && tsc -b && vite build",
     "stops": "node scripts/fetch-stops.mjs",
     "train:digits": "python scripts/train_digit_cnn.py",
+    "inspect:ocr": "node scripts/inspect-debug.mjs",
     "test": "vitest run",
     "lint": "oxlint",
     "preview": "vite preview"

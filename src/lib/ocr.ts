@@ -1,11 +1,25 @@
 import { loadModel, predict, type DigitCnnModel } from './digitcnn'
-import { segmentDigits, normalizeCell } from './segment'
+import {
+  segmentDigits,
+  selectTextBand,
+  normalizeCell,
+  type Segment,
+} from './segment'
 import type { BinaryImage } from './preprocessing'
 
 export interface OcrResult {
   digits: string
   confidence: number
   probs: number[]
+  /** Bounding boxes of each segmented digit in crop coordinates. */
+  boxes: Segment[]
+}
+
+export interface OcrDiagnostic {
+  /** Number of digit columns found before/after heuristics, or null if unusable. */
+  segmentCount: number | null
+  /** Why segmentation/reco produced nothing (last failing stage). */
+  failReason?: 'no-band' | 'seg-not-5' | 'empty-cell' | null
 }
 
 let modelPromise: Promise<DigitCnnModel> | null = null
@@ -48,5 +62,65 @@ export function recognizeDigits(
     probs.push(p[best])
     conf += p[best]
   }
-  return { digits: digits.join(''), confidence: conf / 5, probs }
+  return { digits: digits.join(''), confidence: conf / 5, probs, boxes: segs }
+}
+
+/**
+ * Debug-only variant of segmentDigits that returns diagnostics instead of
+ * returning null. Used by the dev diagnostics panel to show *why* the frame
+ * did not produce exactly five usable digits, and the raw column projection.
+ */
+export function segmentDigitsDiagnostic(
+  bin: BinaryImage,
+): {
+  segs: Segment[] | null
+  band: { y0: number; y1: number } | null
+  rawSegments: number
+  segmentCount: number | null
+  failReason: OcrDiagnostic['failReason']
+} {
+  const band = selectTextBand(bin)
+  if (!band) {
+    return {
+      segs: null,
+      band: null,
+      rawSegments: 0,
+      segmentCount: null,
+      failReason: 'no-band',
+    }
+  }
+  const rawSegments = countRawSegments(bin, band)
+  const segs = segmentDigits(bin)
+  const segmentCount = segs ? segs.length : null
+  if (!segs) {
+    return {
+      segs: null,
+      band,
+      rawSegments,
+      segmentCount,
+      failReason: 'seg-not-5',
+    }
+  }
+  return { segs, band, rawSegments, segmentCount, failReason: null }
+}
+
+function countRawSegments(bin: BinaryImage, band: { y0: number; y1: number }): number {
+  const cols = new Int32Array(bin.width)
+  for (let y = band.y0; y < band.y1; y++) {
+    for (let x = 0; x < bin.width; x++) {
+      if (bin.data[y * bin.width + x]) cols[x]++
+    }
+  }
+  let start = -1
+  let n = 0
+  for (let x = 0; x < bin.width; x++) {
+    if (cols[x] > 0) {
+      if (start < 0) start = x
+    } else if (start >= 0) {
+      n++
+      start = -1
+    }
+  }
+  if (start >= 0) n++
+  return n
 }

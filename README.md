@@ -38,7 +38,36 @@ npm run test         # unit tests (CNN inference + segmentation)
 npm run build        # typecheck + build to dist/
 npm run preview      # serve the production build
 npm run lint         # oxlint
+npm run inspect:ocr  # visualize a saved debug frame (see below)
 ```
+
+### Debugging OCR on a real device
+
+The `dev` build shows an **OCR debug panel** on the scan screen. It overlays
+coloured boxes on the binarized crop (green = 5 digits segmented, red = not)
+and reports the exact stage that failed, the per-digit CNN confidence, and the
+segmentation count.
+
+The pipeline has two independent failure modes — it's important to tell them
+apart:
+
+- **Segmentation problem** (`segmentCount ≠ 5 / 5`, `failReason: seg-not-5` or
+  `no-band`): the crop could not be split into exactly five digit columns.
+  Causes: touching/merged digits, glare, or a non-text guide-box fill.
+- **Classification problem** (`segmentCount === 5` but wrong digits / low
+  per-digit confidence): segmentation worked, the CNN misread a clean crop.
+
+To capture a frame for offline analysis tap **Save frame** while holding a
+stop in the guide box. It downloads a `leneta-debug-<ts>.json`, then:
+
+```bash
+npm run inspect:ocr -- path/to/leneta-debug-12345.json
+```
+
+This writes a side-by-side SVG (and prints an ASCII downscaled view) of the
+*exact* binarized pixels and digit boxes the segmenter/CNN saw, plus the
+verdict. Collect several frames of a real bus-stop pole — the diagnosis tells
+you which part of the OCR to fix (see the HF-model plan in the repo notes).
 
 `vite.config.ts` uses `base: '/lenETA/'` so the app works under a GitHub Pages
 project URL (`https://<user>.github.io/lenETA/`). Override with the

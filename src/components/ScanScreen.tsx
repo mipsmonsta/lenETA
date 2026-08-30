@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCamera } from '../hooks/useCamera'
-import { useOcr, type ScanStatus } from '../hooks/useOcr'
+import { useOcr, DEBUG_REFS, type ScanStatus } from '../hooks/useOcr'
 import { containerBoxToVideoRect, type Rect } from '../lib/preprocessing'
 import { loadStops } from '../lib/stops'
+import { ENABLE_OCR_DEBUG } from '../lib/debug'
 import type { Stop } from '../types'
 
 export default function ScanScreen({
@@ -16,6 +17,7 @@ export default function ScanScreen({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLCanvasElement | null>(null)
+  const [saved, setSaved] = useState(false)
   const { videoRef, active, error, start } = useCamera()
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 })
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
@@ -93,9 +95,49 @@ export default function ScanScreen({
       const c = previewRef.current
       c.width = status.preview.width
       c.height = status.preview.height
-      c.getContext('2d')?.drawImage(status.preview, 0, 0)
+      const ctx = c.getContext('2d')
+      if (!ctx) return
+      ctx.drawImage(status.preview, 0, 0)
+      // Overlay segmentation boxes so the dev can see *where* each digit was
+      // found (green) vs. a rejected frame (red, from runDiagnostic).
+      const boxes = status.boxes
+      ctx.strokeStyle = boxes && boxes.length === 5 ? '#2ee66a' : '#ff4455'
+      ctx.lineWidth = 1
+      for (const b of status.boxes ?? []) {
+        ctx.strokeRect(b.x, b.y, b.width, b.height)
+      }
     }
-  }, [status.preview])
+  }, [status.preview, status.boxes])
+
+  const saveDebugFrame = () => {
+    const { bin, boxes } = DEBUG_REFS.current
+    const diag = status.diagnostic
+    const payload = {
+      savedAt: new Date().toISOString(),
+      reading: status.reading,
+      confidence: status.confidence,
+      perDigitConf: status.perDigitConf ?? [],
+      diagnostic: diag
+        ? { segmentCount: diag.segmentCount, failReason: diag.failReason }
+        : null,
+      binWidth: bin?.width ?? 0,
+      binHeight: bin?.height ?? 0,
+      // 1 = ink, 0 = background, as a compact row-run-length array.
+      rle: bin ? rleEncode(bin.data) : [],
+      boxes: boxes
+        ? boxes.map((b) => ({ x: b.x, y: b.y, w: b.width, h: b.height }))
+        : null,
+    }
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `leneta-debug-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
   return (
     <div className="screen scan-screen">
@@ -111,8 +153,37 @@ export default function ScanScreen({
           }}
         />
         {box && <div className="guide-box" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
-        {import.meta.env.DEV && (
+        {ENABLE_OCR_DEBUG && (
           <canvas ref={previewRef} className="ocr-preview" />
+        )}
+
+        {ENABLE_OCR_DEBUG && !error && (
+          <div className="scan-debug">
+            <div className="scan-debug-head">
+              <span className="scan-debug-title">OCR debug</span>
+              <button
+                type="button"
+                className="debug-save"
+                onClick={saveDebugFrame}
+              >
+                {saved ? 'Saved ✓' : 'Save frame'}
+              </button>
+            </div>
+            <div className="scan-debug-rows">
+              <span>Reading: <b>{status.reading || '—'}</b></span>
+              <span>Conf (mean): <b>{status.confidence ? `${Math.round(status.confidence * 100)}%` : '—'}</b></span>
+              <span>Per-digit: <b>{status.perDigitConf?.length ? status.perDigitConf.map((p) => Math.round(p * 100)).join(', ') : '—'}%</b></span>
+              <span>
+                Segments: <b>{status.diagnostic?.segmentCount ?? '—'}/5</b>{' '}
+                <span className={status.diagnostic?.segmentCount === 5 ? 'dbg-ok' : 'dbg-bad'}>
+                  {status.diagnostic?.segmentCount === 5 ? 'OK' : 'FAIL'}
+                </span>
+              </span>
+              <span>
+                Fail stage: <b>{status.diagnostic?.failReason ?? '—'}</b>
+              </span>
+            </div>
+          </div>
         )}
 
         {error ? (
@@ -163,4 +234,26 @@ export default function ScanScreen({
       )}
     </div>
   )
+}
+
+/**
+ * Compact row-run-length encoding of a binary image for the saved debug JSON:
+ * [[runValue, runLength], ...] flat over all pixels, 1 = ink, 0 = background.
+ */
+function rleEncode(data: Uint8Array): number[] {
+  const out: number[] = []
+  if (data.length === 0) return out
+  let prev = data[0]
+  let run = 0
+  for (let i = 0; i < data.length; i++) {
+    if (data[i] === prev) {
+      run++
+    } else {
+      out.push(prev, run)
+      prev = data[i]
+      run = 1
+    }
+  }
+  out.push(prev, run)
+  return out
 }
