@@ -70,28 +70,69 @@ export function binarizeRegionWithReason(
   // Very permissive, but still reject a truly uniform/unreadable crop.
   if (max - min < 12) return { bin: null, reason: 'low-contrast' }
 
-  let bin = adaptiveThreshold(gray, width, height)
+  // Otsu's global threshold splits a bimodal crop (ink vs background) into
+  // two clean classes. For a fairly uniform plaque this is more stable than
+  // the local adaptive threshold, which fragments thin digit bridges under
+  // camera noise. Ink is the DARKER class, unless the dark class is the large
+  // majority (i.e. we have light-on-dark signage) in which case we invert so
+  // ink always means the minority foreground strokes.
+  const th = otsuThreshold(gray, width * height)
+  let bin: Uint8Array = new Uint8Array(gray.length)
+  for (let i = 0; i < gray.length; i++) bin[i] = gray[i] <= th ? 1 : 0
   let ink = countInk(bin)
 
-  if (ink < 6) {
-    // Adaptive threshold failed (low contrast): fall back to a global
-    // threshold so thin/dim real digits are still picked up.
-    const th = sum / gray.length
-    bin = new Uint8Array(bin.length)
-    for (let i = 0; i < bin.length; i++) bin[i] = gray[i] < th * 0.92 ? 1 : 0
+  if (ink < 6 || ink > gray.length / 2) {
+    // Fall back to / correct with the adaptive threshold for low-contrast or
+    // skewed captures; then always force the minority class to be ink.
+    let ad = adaptiveThreshold(gray, width, height)
+    let adInk = countInk(ad)
+    if (adInk > gray.length / 2) ad = invert(ad)
+    bin = ad
     ink = countInk(bin)
+    if (ink < 6) {
+      const mean = sum / gray.length
+      bin = new Uint8Array(gray.length)
+      for (let i = 0; i < gray.length; i++) bin[i] = gray[i] < mean * 0.92 ? 1 : 0
+      ink = countInk(bin)
+      if (ink > gray.length / 2) bin = invert(bin)
+    }
   }
-  if (ink < 6) return { bin: null, reason: 'no-ink' }
-  if (ink > width * height / 2) bin = invert(bin)
+  if (countInk(bin) < 6) return { bin: null, reason: 'no-ink' }
 
   // Denoise with a morphological open. Use a full 3x3 open first so solid,
-  // merged digit blobs get separated/hollowed back towards outlines (the
-  // case that produced all-black CNN cells). If that would wipe out the text
-  // entirely (thin real strokes), fall back to the unopened bin so we never
-  // silently erase a usable row (the earlier "no-band" bug).
+  // merged digit blobs get separated/hollowed back towards outlines. If that
+  // would wipe out the text entirely (thin real strokes), fall back to the
+  // unopened bin so we never silently erase a usable row.
   const opened = morphOpen(bin, width, height)
   bin = countInk(opened) > 0 ? opened : bin
   return { bin: { data: bin, width, height }, reason: null }
+}
+
+/** Otsu's method: threshold that maximizes inter-class variance. */
+export function otsuThreshold(gray: Uint8Array, n: number): number {
+  const hist = new Float64Array(256)
+  for (let i = 0; i < n; i++) hist[gray[i]]++
+  let sum = 0
+  for (let i = 0; i < 256; i++) sum += i * hist[i]
+  let sumB = 0
+  let wB = 0
+  let maxVar = -1
+  let threshold = 127
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]
+    if (wB === 0) continue
+    const wF = n - wB
+    if (wF === 0) break
+    sumB += t * hist[t]
+    const mB = sumB / wB
+    const mF = (sum - sumB) / wF
+    const varBetween = wB * wF * (mB - mF) * (mB - mF)
+    if (varBetween > maxVar) {
+      maxVar = varBetween
+      threshold = t
+    }
+  }
+  return threshold
 }
 
 function countInk(bin: Uint8Array): number {

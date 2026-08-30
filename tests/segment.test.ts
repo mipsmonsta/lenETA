@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { otsuThreshold } from '../src/lib/preprocessing'
 import { modelFromJson } from '../src/lib/digitcnn'
 import { normalizeCell, segmentDigits, selectTextBand } from '../src/lib/segment'
 import { recognizeDigits } from '../src/lib/ocr'
@@ -126,5 +127,31 @@ describe('segmentation + CNN end to end (real rendered rows)', () => {
     const cell = normalizeCell(bin, 0, 0, 28, 28)
     expect(cell).not.toBeNull()
     expect(cell!.some((v) => v > 0)).toBe(true)
+  })
+})
+
+describe('otsu binarization threshold', () => {
+  it('splits a clean bimodal crop near the midpoint of the two classes', () => {
+    // Two clean classes: dark digits ~40, bright background ~210.
+    const gray = new Uint8Array(10000)
+    for (let i = 0; i < 2000; i++) gray[i] = 40
+    for (let i = 2000; i < 10000; i++) gray[i] = 210
+    const th = otsuThreshold(gray, gray.length)
+    // Otsu lands on the separator; with `<=`, th=40 must still classify the
+    // dark class and never the light one.
+    expect(th).toBeGreaterThanOrEqual(40)
+    expect(th).toBeLessThan(210)
+    let ink = 0
+    for (let i = 0; i < 2000; i++) if (gray[i] <= th) ink++
+    expect(ink).toBe(2000)
+  })
+
+  it('separates uniform foreground from background even when small', () => {
+    const gray = new Uint8Array(4000)
+    for (let i = 0; i < 400; i++) gray[i] = 30
+    for (let i = 400; i < 4000; i++) gray[i] = 180
+    const th = otsuThreshold(gray, gray.length)
+    expect(th).toBeGreaterThanOrEqual(30)
+    expect(th).toBeLessThan(180)
   })
 })
