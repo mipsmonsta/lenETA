@@ -84,10 +84,13 @@ export function binarizeRegionWithReason(
   if (ink < 6) return { bin: null, reason: 'no-ink' }
   if (ink > width * height / 2) bin = invert(bin)
 
-  // Use a gentler open (single erode+dilate of thin structures) so that
-  // real digit strokes aren't wiped out entirely. Only erode away isolated
-  // specks while preserving connected text.
-  bin = morphOpen(bin, width, height)
+  // Denoise with a morphological open. Use a full 3x3 open first so solid,
+  // merged digit blobs get separated/hollowed back towards outlines (the
+  // case that produced all-black CNN cells). If that would wipe out the text
+  // entirely (thin real strokes), fall back to the unopened bin so we never
+  // silently erase a usable row (the earlier "no-band" bug).
+  const opened = morphOpen(bin, width, height)
+  bin = countInk(opened) > 0 ? opened : bin
   return { bin: { data: bin, width, height }, reason: null }
 }
 
@@ -140,23 +143,20 @@ function invert(bin: Uint8Array): Uint8Array {
 }
 
 /**
- * Gentle morphological open (erode with a 4-neighbourhood cross, then dilate
- * with a 3x3). The cross erosion only removes isolated specks — pixels whose
- * horizontal AND vertical neighbours are all empty — while a 3x3 erosion would
- * have wiped out thin real-world digit strokes entirely. Widening this back to
- * a 3x3-open was a silent cause of "no-band" on real bus-stop text.
+ * 3x3 morphological open (erode then dilate). Erosion removes isolated
+ * specks and thins/hollows solid merged digit blobs back towards outlines;
+ * dilation restores the remaining connected strokes. Callers guard against
+ * total erasure (empty result) so thin text is never lost.
  */
 function morphOpen(bin: Uint8Array, w: number, h: number): Uint8Array {
   const eroded = new Uint8Array(w * h)
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const i = y * w + x
-      // Keep a pixel only if it has an inked horizontal and vertical
-      // neighbour (i.e. is not an isolated speck). Thin strokes survive.
       if (
-        bin[i] &&
-        ((bin[i - 1] && bin[i + 1]) || // horizontal line
-          (bin[i - w] && bin[i + w]))   // vertical line
+        bin[i - w - 1] && bin[i - w] && bin[i - w + 1] &&
+        bin[i - 1] && bin[i] && bin[i + 1] &&
+        bin[i + w - 1] && bin[i + w] && bin[i + w + 1]
       ) {
         eroded[i] = 1
       }

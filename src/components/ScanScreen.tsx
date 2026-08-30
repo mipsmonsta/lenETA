@@ -19,6 +19,7 @@ export default function ScanScreen({
   const previewRef = useRef<HTMLCanvasElement | null>(null)
   const cellsRef = useRef<HTMLCanvasElement | null>(null)
   const [saved, setSaved] = useState(false)
+  const [copied, setCopied] = useState(false)
   const { videoRef, active, error, start } = useCamera()
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 })
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 })
@@ -136,6 +137,28 @@ export default function ScanScreen({
     }
   }, [status.cells])
 
+  const copyAscii = async () => {
+    const { bin } = DEBUG_REFS.current
+    if (!bin) return
+    const cols = 56
+    const scale = Math.max(1, Math.ceil(bin.width / cols))
+    let ascii = `crop ${bin.width}x${bin.height}\n`
+    for (let y = 0; y < bin.height; y += Math.max(1, scale)) {
+      let line = ''
+      for (let x = 0; x < bin.width; x += scale) {
+        line += bin.data[y * bin.width + x] === 1 ? '##' : '  '
+      }
+      ascii += line + '\n'
+    }
+    try {
+      await navigator.clipboard.writeText(ascii)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // clipboard may be unavailable; ignore
+    }
+  }
+
   const saveDebugFrame = () => {
     const { bin, boxes } = DEBUG_REFS.current
     const diag = status.diagnostic
@@ -196,6 +219,13 @@ export default function ScanScreen({
                 onClick={saveDebugFrame}
               >
                 {saved ? 'Saved ✓' : 'Save frame'}
+              </button>
+              <button
+                type="button"
+                className="debug-save debug-save-alt"
+                onClick={copyAscii}
+              >
+                {copied ? 'Copied ✓' : 'Copy binarized'}
               </button>
             </div>
             <div className="scan-debug-rows">

@@ -242,9 +242,13 @@ button {
 .scan-debug-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-bottom: 4px;
+  justify-content: space-between;
+}
+.debug-save-alt {
+  background: #445;
 }
 .scan-debug-title {
   font-weight: 700;
