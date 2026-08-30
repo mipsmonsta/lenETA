@@ -17,6 +17,7 @@ export default function ScanScreen({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLCanvasElement | null>(null)
+  const cellsRef = useRef<HTMLCanvasElement | null>(null)
   const [saved, setSaved] = useState(false)
   const { videoRef, active, error, start } = useCamera()
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 })
@@ -109,6 +110,32 @@ export default function ScanScreen({
     }
   }, [status.preview, status.boxes])
 
+  // Render the 5 normalized 28x28 input cells the CNN sees, so we can spot
+  // whether a misread is due to malformed cells (blobs/lopsided) or the model.
+  useEffect(() => {
+    const cvs = cellsRef.current
+    const cells = status.cells
+    if (!cvs) return
+    const ctx = cvs.getContext('2d')
+    if (!ctx) return
+    if (!cells) return
+    const cellPx = 18
+    const gap = 2
+    ctx.clearRect(0, 0, cvs.width, cvs.height)
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i]
+      const ox = i * (cellPx + gap)
+      for (let yy = 0; yy < 28; yy++) {
+        for (let xx = 0; xx < 28; xx++) {
+          const v = cell[yy * 28 + xx]
+          const ink = v / 255
+          ctx.fillStyle = `rgba(255,255,255,${ink})`
+          ctx.fillRect(ox + xx, yy, 1, 1)
+        }
+      }
+    }
+  }, [status.cells])
+
   const saveDebugFrame = () => {
     const { bin, boxes } = DEBUG_REFS.current
     const diag = status.diagnostic
@@ -117,6 +144,8 @@ export default function ScanScreen({
       reading: status.reading,
       confidence: status.confidence,
       perDigitConf: status.perDigitConf ?? [],
+      // 28x28 input cells the CNN actually saw (0..255 ink, row-major).
+      cells: status.cells ?? null,
       diagnostic: diag
         ? { segmentCount: diag.segmentCount, failReason: diag.failReason }
         : null,
@@ -185,6 +214,17 @@ export default function ScanScreen({
                   <b>{failStageLabel(status.diagnostic?.failReason)}</b>
                 </span>
               </span>
+              {status.cells && status.cells.length > 0 && (
+                <div className="scan-cells">
+                  <div className="scan-cells-label">CNN inputs (28×28):</div>
+                  <canvas
+                    ref={cellsRef}
+                    width={5 * 18 + 4 * 2}
+                    height={28}
+                    className="cells-canvas"
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}

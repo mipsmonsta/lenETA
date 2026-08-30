@@ -88,6 +88,23 @@ console.log(
     : 'segmentation problem (could not split into 5 digits)',
 )
 
+// Render the normalized 28x28 cells the CNN actually received (if saved).
+if (d.cells && d.cells.length === 5) {
+  console.log('\nCNN inputs (normalized 28x28 cells):')
+  for (let yy = 0; yy < 28; yy++) {
+    let row = ''
+    for (let i = 0; i < 5; i++) {
+      let line = ''
+      for (let xx = 0; xx < 28; xx++) {
+        const v = (d.cells[i][yy * 28 + xx] || 0) / 255
+        line += v > 0.4 ? '█' : (v > 0.15 ? '▒' : ' ')
+      }
+      row += line + '  '
+    }
+    console.log(row)
+  }
+}
+
 const svgPath = file.replace(/\.json$/, '.svg')
 import('node:fs/promises').then(async ({ writeFile }) => {
   await writeFile(svgPath, renderSvg(d, bin))

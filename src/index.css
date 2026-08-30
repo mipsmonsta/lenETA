@@ -271,6 +271,22 @@ button {
   font-family: var(--mono);
   font-weight: 600;
 }
+.scan-cells {
+  margin-top: 2px;
+}
+.scan-cells-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+.cells-canvas {
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  width: auto;
+  image-rendering: pixelated;
+}
+
 .dbg-ok {
   color: #2ee66a;
 }

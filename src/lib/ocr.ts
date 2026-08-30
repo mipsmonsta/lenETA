@@ -13,6 +13,12 @@ export interface OcrResult {
   probs: number[]
   /** Bounding boxes of each segmented digit in crop coordinates. */
   boxes: Segment[]
+  /**
+   * The normalized 28x28 inputs actually fed to the CNN (0..1 ink), one per
+   * digit, flattened row-major. Useful to see whether a misread is a
+   * preprocessing problem (blobs/lopsided cells) vs a genuine classifier gap.
+   */
+  cells: number[][]
 }
 
 export interface OcrDiagnostic {
@@ -62,10 +68,12 @@ export function recognizeDigits(
 
   const digits: number[] = []
   const probs: number[] = []
+  const cells: number[][] = []
   let conf = 0
   for (const s of segs) {
     const cell = normalizeCell(bin, s.x, s.y, s.width, s.height)
     if (!cell) return null
+    cells.push(Array.from(cell, (v) => Math.round(v * 255)))
     const p = predict(model, cell)
     let best = 0
     for (let i = 1; i < p.length; i++) {
@@ -75,7 +83,13 @@ export function recognizeDigits(
     probs.push(p[best])
     conf += p[best]
   }
-  return { digits: digits.join(''), confidence: conf / 5, probs, boxes: segs }
+  return {
+    digits: digits.join(''),
+    confidence: conf / 5,
+    probs,
+    boxes: segs,
+    cells,
+  }
 }
 
 /**

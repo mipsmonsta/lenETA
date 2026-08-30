@@ -28,6 +28,12 @@ export interface ScanStatus {
   diagnostic?: OcrDiagnostic
   /** DEV-only: per-digit classifier confidence (0..1). */
   perDigitConf?: number[]
+  /**
+   * DEV-only: the normalized 28x28 input cells the CNN receives for each of
+   * the 5 digits (0..255 ink), row-major. Lets us see if a misread is a
+   * preprocessing problem (blobs) or a genuine classifier gap.
+   */
+  cells?: number[][] | null
 }
 
 /**
@@ -131,6 +137,7 @@ export function useOcr(opts: {
         let confidence = 0
         let match = false
         const perDigitConf: number[] = result?.probs ?? []
+        const cells: number[][] | null = result?.cells ?? null
 
         if (result) {
           reading = result.digits
@@ -162,6 +169,7 @@ export function useOcr(opts: {
           boxes,
           diagnostic,
           perDigitConf,
+          cells,
         })
 
         if (match) {
