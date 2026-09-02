@@ -72,8 +72,8 @@ function encodePNG(size, rgba) {
   return Buffer.concat([sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))])
 }
 
-function layout(size) {
-  const scale = Math.max(3, Math.round(size / 46))
+function layout(size, scaleOverride) {
+  const scale = scaleOverride ?? Math.max(3, Math.round(size / 46))
   const digitW = 5 * scale
   const digitH = 7 * scale
   const gap = Math.max(2, Math.round(scale * 1.2))
@@ -90,6 +90,12 @@ function layout(size) {
 }
 
 function drawDigit(rgba, size, digit, x, y, scale, color) {
+  // Typed-array indexes must be integers: the layout offsets can be
+  // fractional (e.g. plate width is odd at 512px), and a fractional index
+  // silently drops the write — which used to make the digits vanish on the
+  // 512px icons. Round the origin first.
+  const x0 = Math.round(x)
+  const y0 = Math.round(y)
   const rows = FONT[digit]
   for (let r = 0; r < 7; r++) {
     const row = rows[r]
@@ -97,8 +103,8 @@ function drawDigit(rgba, size, digit, x, y, scale, color) {
       if (row[c] !== '1') continue
       for (let py = 0; py < scale; py++) {
         for (let px = 0; px < scale; px++) {
-          const X = x + c * scale + px
-          const Y = y + r * scale + py
+          const X = x0 + c * scale + px
+          const Y = y0 + r * scale + py
           if (X >= size || Y >= size) continue
           const i = (Y * size + X) * 4
           rgba[i] = color[0]
@@ -111,12 +117,80 @@ function drawDigit(rgba, size, digit, x, y, scale, color) {
   }
 }
 
+/** Paint the yellow/cream bus-stop plate (with navy digits) centred in the canvas. */
+function fillPlate(rgba, size, L) {
+  const border = Math.max(2, Math.round(size * 0.012))
+  const px1 = L.px0 + L.plateW
+  const py1 = L.py0 + L.plateH
+  const rOuter = Math.round(L.plateH * 0.18)
+  const rInner = Math.round(L.plateH * 0.16)
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4
+      const inPlate = inRoundedRect(x, y, L.px0, L.py0, px1, py1, rOuter)
+      const inInner = inRoundedRect(x, y, L.px0 + border, L.py0 + border, px1 - border, py1 - border, rInner)
+      if (inPlate) {
+        const col = inInner ? CREAM : YELLOW
+        rgba[i] = col[0]
+        rgba[i + 1] = col[1]
+        rgba[i + 2] = col[2]
+        rgba[i + 3] = col[3]
+      }
+    }
+  }
+  const digits = '83111'
+  for (let d = 0; d < 5; d++) {
+    const dx = L.dx0 + d * (L.digitW + L.gap)
+    drawDigit(rgba, size, digits[d], dx, L.dy0, L.scale, NAVY)
+  }
+}
+
+/**
+ * Maskable icons get zoomed by Android to fill the launcher's mask (circle /
+ * squircle / rounded square), then the mask clips everything outside the
+ * central safe zone (~61-66% diameter). So: shrink the artwork to sit inside
+ * that zone, and use a full-bleed opaque background — transparent corners
+ * would show as holes on squircle/rounded-square masks.
+ */
+function layoutMaskable(size) {
+  // Content sized so the plate stays inside the safe circle: for 512 this
+  // yields a ~52% wide plate (digits ~41%), well within ~61%.
+  const scale = Math.max(4, Math.round(size / 73))
+  return layout(size, scale)
+}
+
+function makeMaskableIcon(size) {
+  const rgba = new Uint8Array(size * size * 4)
+  // Full-bleed navy background (no rounded corners, no transparency).
+  for (let p = 0; p < rgba.length; p += 4) {
+    rgba[p] = NAVY[0]
+    rgba[p + 1] = NAVY[1]
+    rgba[p + 2] = NAVY[2]
+    rgba[p + 3] = NAVY[3]
+  }
+  fillPlate(rgba, size, layoutMaskable(size))
+  return encodePNG(size, rgba)
+}
+
+/**
+ * Android 13+ themed icons use a single-colour silhouette (system tints it).
+ * Transparent background + just the digits keeps it recognisable and simple.
+ */
+function makeMonochromeIcon(size) {
+  const rgba = new Uint8Array(size * size * 4) // transparent background
+  const L = layoutMaskable(size)
+  const digits = '83111'
+  for (let d = 0; d < 5; d++) {
+    const dx = L.dx0 + d * (L.digitW + L.gap)
+    drawDigit(rgba, size, digits[d], dx, L.dy0, L.scale, NAVY)
+  }
+  return encodePNG(size, rgba)
+}
+
 function makeIcon(size) {
   const rgba = new Uint8Array(size * size * 4)
   const L = layout(size)
   const radius = Math.round(size * 0.2)
-  const px1 = L.px0 + L.plateW
-  const py1 = L.py0 + L.plateH
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -130,27 +204,7 @@ function makeIcon(size) {
     }
   }
 
-  const border = Math.max(2, Math.round(size * 0.012))
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4
-      const inPlate = inRoundedRect(x, y, L.px0, L.py0, px1, py1, Math.round(L.plateH * 0.18))
-      const inInner = inRoundedRect(x, y, L.px0 + border, L.py0 + border, px1 - border, py1 - border, Math.round(L.plateH * 0.16))
-      if (inPlate) {
-        const col = inInner ? CREAM : YELLOW
-        rgba[i] = col[0]
-        rgba[i + 1] = col[1]
-        rgba[i + 2] = col[2]
-        rgba[i + 3] = col[3]
-      }
-    }
-  }
-
-  const digits = '83111'
-  for (let d = 0; d < 5; d++) {
-    const dx = L.dx0 + d * (L.digitW + L.gap)
-    drawDigit(rgba, size, digits[d], dx, L.dy0, L.scale, NAVY)
-  }
+  fillPlate(rgba, size, L)
   return encodePNG(size, rgba)
 }
 
@@ -187,6 +241,8 @@ function makeSvg() {
 
 writeFileSync(join(iconDir, 'icon-192.png'), makeIcon(192))
 writeFileSync(join(iconDir, 'icon-512.png'), makeIcon(512))
+writeFileSync(join(iconDir, 'icon-512-maskable.png'), makeMaskableIcon(512))
+writeFileSync(join(iconDir, 'icon-512-monochrome.png'), makeMonochromeIcon(512))
 writeFileSync(join(iconDir, 'apple-touch-icon.png'), makeIcon(180))
 writeFileSync(join(publicDir, 'favicon.svg'), makeSvg())
-console.log('Generated icons (192/512/apple-touch) and favicon.svg')
+console.log('Generated icons (192/512/maskable/monochrome/apple-touch) and favicon.svg')
