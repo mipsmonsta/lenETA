@@ -2,20 +2,19 @@
 /**
  * Inspect a saved lenETA debug frame.
  *
- * From the phone (dev build), tap "Save frame" in the OCR debug panel while
+ * From the phone (debug build), tap "Save frame" in the OCR debug panel while
  * holding a bus stop visible in the guide box. It downloads a
  * `leneta-debug-<ts>.json`. Run:
  *
  *   node scripts/inspect-debug.mjs path/to/leneta-debug-*.json
  *
- * This decodes the row-run-length-encoded binarized crop, writes an SVG
- * (ASCII fallback to stdout) so you can eyeball the exact pixels and digit
- * boxes the CNN/segmenter saw, and prints the diagnostic + per-digit
- * confidence. Use it to distinguish *classification* failures from
- * *segmentation* failures — the two very different root causes.
+ * The frame stores the *exact raw crop pixels* the Tesseract.js engine saw
+ * (cropDataUrl) plus its raw output text, so you can replay and judge
+ * whether a miss was an image-quality problem (blur/glare/small digits) or a
+ * genuine OCR mistake.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 
 const file = process.argv[2]
 if (!file) {
@@ -25,102 +24,46 @@ if (!file) {
 
 const d = JSON.parse(readFileSync(file, 'utf8'))
 
-function decodeRle(rle, w, h, pxValue = v => (v === 1 ? 0 : 255)) {
-  // rle is [value, run, value, run, ...] over all rows.
-  const out = Buffer.from(new Float32Array(w * h).map(() => 255)) // background white
-  let p = 0
-  const data = new Uint8Array(w * h)
-  for (let k = 0; k < rle.length; k += 2) {
-    const val = rle[k]
-    const run = rle[k + 1]
-    for (let n = 0; n < run; n++) {
-      data[p++] = val
-    }
-  }
-  for (let i = 0; i < data.length; i++) out[i] = pxValue(data[i])
-  return { data: out, width: w, height: h }
-}
-
-function renderSvg(d, bin) {
-  const w = bin.width
-  const h = bin.height
-  const px = Math.ceil(bin.pixel) || 1
-  const W = w * px
-  const H = h * px
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
-  s += `<rect width="${W}" height="${H}" fill="white"/>`
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (bin.data[y * w + x] === 0) { // ink drawn black
-        s += `<rect x="${x * px}" y="${y * px}" width="${px}" height="${px}" fill="black"/>`
-      }
-    }
-  }
-  // digit boxes (green)
-  for (const b of d.boxes ?? []) {
-    s += `<rect x="${b.x * px}" y="${b.y * px}" width="${b.w * px}" height="${b.h * px}" fill="none" stroke="lime" stroke-width="${Math.max(1, px)}"/>`
-  }
-  // fail band (red) when no segments
-  if (!d.boxes && d.diagnostic?.segmentCount != null) {
-    s += `<rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="red" stroke-width="${Math.max(2, px)}"/>`
-  }
-  s += `</svg>`
-  return s
-}
-
-const px = Math.max(1, Math.round(32 / (d.binWidth || 1)))
-const bin = decodeRle(d.rle, d.binWidth, d.binHeight)
-bin.pixel = px
-
 console.log('Saved debug frame')
 console.log('─────────────────')
-console.log('  reading       :', d.reading || '—')
-console.log('  mean conf     :', d.confidence ? `${Math.round(d.confidence * 100)}%` : '—')
-console.log('  per-digit conf:', d.perDigitConf?.length ? d.perDigitConf.map(p => `${Math.round(p * 100)}%`).join('  ') : '—')
-console.log('  segments      :', d.diagnostic?.segmentCount ?? '—', '/ 5',
-  d.diagnostic?.segmentCount === 5 ? '(OK)' : '')
-console.log('  fail stage    :', d.diagnostic?.failReason ?? '—')
-console.log('  crop size     :', `${d.binWidth}×${d.binHeight}`)
-console.log(
-  '  verdicy       :',
-  d.diagnostic?.segmentCount === 5
-    ? 'classification problem (CNN misread)'
-    : 'segmentation problem (could not split into 5 digits)',
-)
+console.log('  saved at     :', d.savedAt ?? '—')
+console.log('  reading      :', d.reading || '—')
+console.log('  code (5 digs):', d.code ?? '—')
+console.log('  confidence   :', d.confidence ? `${Math.round(d.confidence * 100)}%` : '—')
+console.log('  raw OCR text :', JSON.stringify(d.rawText ?? '—'))
 
-// Render the normalized 28x28 cells the CNN actually received (if saved).
-if (d.cells && d.cells.length === 5) {
-  console.log('\nCNN inputs (normalized 28x28 cells):')
-  for (let yy = 0; yy < 28; yy++) {
-    let row = ''
-    for (let i = 0; i < 5; i++) {
-      let line = ''
-      for (let xx = 0; xx < 28; xx++) {
-        const v = (d.cells[i][yy * 28 + xx] || 0) / 255
-        line += v > 0.4 ? '█' : (v > 0.15 ? '▒' : ' ')
-      }
-      row += line + '  '
-    }
-    console.log(row)
+if (d.cropDataUrl) {
+  const png = Buffer.from(d.cropDataUrl.split(',')[1] || '', 'base64')
+  if (!png.length) {
+    console.error('  cropDataUrl present but could not be decoded.')
+    process.exit(1)
   }
+  const out = file.replace(/\.json$/, '.png')
+  writeFileSync(out, png)
+  console.log(`\nWrote the raw OCR crop: ${out}`)
+
+  // A tiny HTML page embedding the crop + the readings for quick review.
+  const html = `<!doctype html><meta charset="utf-8"><title>lenETA debug</title>
+<style>body{font:14px system-ui;background:#0b2545;color:#eee;padding:16px}
+img{display:block;max-width:min(90vw,760px);border:1px solid #555;background:#fff}
+code{background:#14294d;padding:2px 6px;border-radius:4px}</style>
+<img src="${d.cropDataUrl}" alt="OCR crop">
+<ul>
+<li>saved: ${d.savedAt ?? '—'}</li>
+<li>reading: <code>${d.reading || '—'}</code></li>
+<li>code (5 digits): <code>${d.code ?? '—'}</code></li>
+<li>confidence: <code>${d.confidence ? Math.round(d.confidence * 100) + '%' : '—'}</code></li>
+<li>raw OCR text: <code>${(d.rawText ?? '').replace(/</g, '&lt;') || '—'}</code></li>
+</ul>`
+  const htmlOut = file.replace(/\.json$/, '.html')
+  writeFileSync(htmlOut, html)
+  console.log(`Wrote viewer: ${htmlOut}`)
+  console.log('\nOpen the PNG or HTML to eyeball what the OCR engine actually saw.')
+} else if (Array.isArray(d.rle)) {
+  console.log(
+    '\nThis looks like a pre-OCR-engine debug frame (binarized RLE from the old CNN ' +
+      'pipeline). Collect a new frame from the Tesseract.js build for a crop image.',
+  )
+} else {
+  console.log('\nNo crop image in this frame.')
 }
-
-const svgPath = file.replace(/\.json$/, '.svg')
-import('node:fs/promises').then(async ({ writeFile }) => {
-  await writeFile(svgPath, renderSvg(d, bin))
-  console.log('\nWrote visualization:', svgPath)
-
-  // Also emit an ASCII downscale for terminal viewing.
-  const w = bin.width
-  const h = bin.height
-  const cols = 56
-  const scale = Math.max(1, Math.ceil(w / cols))
-  console.log('\nDownscaled ASCII (each char ≈', scale, 'px wide):')
-  for (let y = 0; y < h; y += Math.max(1, scale)) {
-    let line = ''
-    for (let x = 0; x < w; x += scale) {
-      line += bin.data[y * w + x] === 0 ? '██' : '  '
-    }
-    console.log(line)
-  }
-})

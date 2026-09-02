@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCamera } from '../hooks/useCamera'
 import { useOcr, DEBUG_REFS, type ScanStatus } from '../hooks/useOcr'
-import { containerBoxToVideoRect, type Rect } from '../lib/preprocessing'
+import { containerBoxToVideoRect, type Rect } from '../lib/geometry'
 import { loadStops } from '../lib/stops'
 import { ENABLE_OCR_DEBUG } from '../lib/debug'
 import type { Stop } from '../types'
@@ -17,7 +17,6 @@ export default function ScanScreen({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLCanvasElement | null>(null)
-  const cellsRef = useRef<HTMLCanvasElement | null>(null)
   const [saved, setSaved] = useState(false)
   const [copied, setCopied] = useState(false)
   const { videoRef, active, error, start } = useCamera()
@@ -58,9 +57,8 @@ export default function ScanScreen({
   }, [])
 
   // Guide box geometry (fraction of the on-screen container), memoized. A
-  // short, wide strip so it hugs a single line of the 5-digit code instead of
-  // grabbing several rows of the poster (which flooded the crop with thin
-  // text rows and made binarization pick a noise band).
+  // short, wide strip so it hugs a single line of the 5-digit code — that is
+  // exactly what the OCR engine is asked to read (PSM single line).
   const box: Rect | null = useMemo(() => {
     if (!containerSize.w || !containerSize.h) return null
     return {
@@ -91,66 +89,24 @@ export default function ScanScreen({
     validate: (code) => stops?.has(code) ?? false,
   })
 
+  // DEV-only: show the exact crop the OCR engine saw.
   useEffect(() => {
     if (status.preview && previewRef.current) {
       const c = previewRef.current
-      c.width = status.preview.width
-      c.height = status.preview.height
+      const src = status.preview
+      c.width = src.width
+      c.height = src.height
       const ctx = c.getContext('2d')
       if (!ctx) return
-      ctx.drawImage(status.preview, 0, 0)
-      // Overlay segmentation boxes so the dev can see *where* each digit was
-      // found (green) vs. a rejected frame (red, from runDiagnostic).
-      const boxes = status.boxes
-      ctx.strokeStyle = boxes && boxes.length === 5 ? '#2ee66a' : '#ff4455'
-      ctx.lineWidth = 1
-      for (const b of status.boxes ?? []) {
-        ctx.strokeRect(b.x, b.y, b.width, b.height)
-      }
+      ctx.drawImage(src, 0, 0)
     }
-  }, [status.preview, status.boxes])
+  }, [status.preview])
 
-  // Render the 5 normalized 28x28 input cells the CNN sees, so we can spot
-  // whether a misread is due to malformed cells (blobs/lopsided) or the model.
-  useEffect(() => {
-    const cvs = cellsRef.current
-    const cells = status.cells
-    if (!cvs) return
-    const ctx = cvs.getContext('2d')
-    if (!ctx) return
-    if (!cells) return
-    const cellPx = 18
-    const gap = 2
-    ctx.clearRect(0, 0, cvs.width, cvs.height)
-    for (let i = 0; i < cells.length; i++) {
-      const cell = cells[i]
-      const ox = i * (cellPx + gap)
-      for (let yy = 0; yy < 28; yy++) {
-        for (let xx = 0; xx < 28; xx++) {
-          const v = cell[yy * 28 + xx]
-          const ink = v / 255
-          ctx.fillStyle = `rgba(255,255,255,${ink})`
-          ctx.fillRect(ox + xx, yy, 1, 1)
-        }
-      }
-    }
-  }, [status.cells])
-
-  const copyAscii = async () => {
-    const { bin } = DEBUG_REFS.current
-    if (!bin) return
-    const cols = 56
-    const scale = Math.max(1, Math.ceil(bin.width / cols))
-    let ascii = `crop ${bin.width}x${bin.height}\n`
-    for (let y = 0; y < bin.height; y += Math.max(1, scale)) {
-      let line = ''
-      for (let x = 0; x < bin.width; x += scale) {
-        line += bin.data[y * bin.width + x] === 1 ? '##' : '  '
-      }
-      ascii += line + '\n'
-    }
+  const copyRawText = async () => {
+    const text = DEBUG_REFS.current.rawText
+    if (!text) return
     try {
-      await navigator.clipboard.writeText(ascii)
+      await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -159,25 +115,14 @@ export default function ScanScreen({
   }
 
   const saveDebugFrame = () => {
-    const { bin, boxes } = DEBUG_REFS.current
-    const diag = status.diagnostic
+    const ref = DEBUG_REFS.current
     const payload = {
       savedAt: new Date().toISOString(),
       reading: status.reading,
-      confidence: status.confidence,
-      perDigitConf: status.perDigitConf ?? [],
-      // 28x28 input cells the CNN actually saw (0..255 ink, row-major).
-      cells: status.cells ?? null,
-      diagnostic: diag
-        ? { segmentCount: diag.segmentCount, failReason: diag.failReason }
-        : null,
-      binWidth: bin?.width ?? 0,
-      binHeight: bin?.height ?? 0,
-      // 1 = ink, 0 = background, as a compact row-run-length array.
-      rle: bin ? rleEncode(bin.data) : [],
-      boxes: boxes
-        ? boxes.map((b) => ({ x: b.x, y: b.y, w: b.width, h: b.height }))
-        : null,
+      code: ref.code,
+      confidence: ref.confidence,
+      rawText: ref.rawText,
+      cropDataUrl: ref.crop ? ref.crop.toDataURL('image/png') : null,
     }
     const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -222,38 +167,20 @@ export default function ScanScreen({
               <button
                 type="button"
                 className="debug-save debug-save-alt"
-                onClick={copyAscii}
+                onClick={copyRawText}
               >
-                {copied ? 'Copied ✓' : 'Copy binarized'}
+                {copied ? 'Copied ✓' : 'Copy raw text'}
               </button>
             </div>
             <div className="scan-debug-rows">
               <span>Reading: <b>{status.reading || '—'}</b></span>
-              <span>Conf (mean): <b>{status.confidence ? `${Math.round(status.confidence * 100)}%` : '—'}</b></span>
-              <span>Per-digit: <b>{status.perDigitConf?.length ? status.perDigitConf.map((p) => Math.round(p * 100)).join(', ') : '—'}%</b></span>
+              <span>Confidence: <b>{status.confidence ? `${Math.round(status.confidence * 100)}%` : '—'}</b></span>
               <span>
-                Segments: <b>{status.diagnostic?.segmentCount ?? '—'}/5</b>{' '}
-                <span className={status.diagnostic?.segmentCount === 5 ? 'dbg-ok' : 'dbg-bad'}>
-                  {status.diagnostic?.segmentCount === 5 ? 'OK' : 'FAIL'}
-                </span>
+                5 digits: <b>{status.recognized ? 'OK' : '—'}</b>
               </span>
-              <span>
-                Fail stage:{' '}
-                <span className={failStageClass(status.diagnostic?.failReason)}>
-                  <b>{failStageLabel(status.diagnostic?.failReason)}</b>
-                </span>
+              <span className="scan-raw-text">
+                Raw OCR: <b>{status.rawText?.trim() ? status.rawText.trim() : '—'}</b>
               </span>
-              {status.cells && status.cells.length > 0 && (
-                <div className="scan-cells">
-                  <div className="scan-cells-label">CNN inputs (28×28):</div>
-                  <canvas
-                    ref={cellsRef}
-                    width={5 * 18 + 4 * 2}
-                    height={28}
-                    className="cells-canvas"
-                  />
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -306,50 +233,4 @@ export default function ScanScreen({
       )}
     </div>
   )
-}
-
-/**
- * Compact row-run-length encoding of a binary image for the saved debug JSON:
- * [[runValue, runLength], ...] flat over all pixels, 1 = ink, 0 = background.
- */
-function rleEncode(data: Uint8Array): number[] {
-  const out: number[] = []
-  if (data.length === 0) return out
-  let prev = data[0]
-  let run = 0
-  for (let i = 0; i < data.length; i++) {
-    if (data[i] === prev) {
-      run++
-    } else {
-      out.push(prev, run)
-      prev = data[i]
-      run = 1
-    }
-  }
-  out.push(prev, run)
-  return out
-}
-
-/** Human-readable label + CSS class for the OCR fail stage. */
-function failStageLabel(reason: string | null | undefined): string {
-  switch (reason) {
-    case 'low-contrast':
-      return 'LOW CONTRAST (binarizer rejected crop)'
-    case 'no-ink':
-      return 'NO INK (binarizer empty)'
-    case 'no-band':
-      return 'NO TEXT ROW (no-band)'
-    case 'seg-not-5':
-      return 'NOT 5 DIGITS (seg-not-5)'
-    case 'empty-cell':
-      return 'EMPTY CELL'
-    default:
-      return reason ?? '—'
-  }
-}
-
-function failStageClass(reason: string | null | undefined): string {
-  return reason && !['seg-not-5', 'empty-cell'].includes(reason)
-    ? 'dbg-bad'
-    : 'dbg-warn'
 }

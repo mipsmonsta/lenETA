@@ -33,7 +33,12 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,json,webmanifest}'],
+        globPatterns: [
+          '**/*.{js,css,html,svg,png,json,webmanifest,gz}',
+        ],
+        // The vendored Tesseract core files are ~3.9 MB each (WASM embedded
+        // as base64); the default 2 MB cap would silently skip them.
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.hostname === 'arrivelah2.busrouter.sg',

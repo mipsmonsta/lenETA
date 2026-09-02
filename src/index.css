@@ -281,30 +281,12 @@ button {
   font-family: var(--mono);
   font-weight: 600;
 }
-.scan-cells {
-  margin-top: 2px;
-}
-.scan-cells-label {
-  font-size: 10px;
+.scan-raw-text {
+  word-break: break-all;
+  line-height: 1.35;
   color: var(--text-dim);
-  margin-bottom: 2px;
-}
-.cells-canvas {
-  background: #000;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  width: auto;
-  image-rendering: pixelated;
-}
-
-.dbg-ok {
-  color: #2ee66a;
-}
-.dbg-bad {
-  color: #ff6b6b;
-}
-.dbg-warn {
-  color: #ffd166;
+  max-height: 4.5em;
+  overflow-y: auto;
 }
 
 .camera-error {

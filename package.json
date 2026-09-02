@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/gen-icons.mjs && tsc -b && vite build",
+    "build": "node scripts/gen-icons.mjs && node scripts/vendor-ocr.mjs && tsc -b && vite build",
+    "vendor:ocr": "node scripts/vendor-ocr.mjs",
     "stops": "node scripts/fetch-stops.mjs",
-    "train:digits": "python scripts/train_digit_cnn.py",
+    "test:ocr": "RUN_OCR_TESTS=1 vitest run tests/ocr.integration.test.ts",
     "inspect:ocr": "node scripts/inspect-debug.mjs",
     "test": "vitest run",
     "lint": "oxlint",
@@ -16,6 +17,7 @@
   "dependencies": {
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "tesseract.js": "^7.0.0",
     "vite-plugin-pwa": "^1.3.0"
   },
   "devDependencies": {
