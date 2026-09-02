@@ -46,25 +46,21 @@ function assetUrl(name: string): string {
 }
 
 /**
- * Fetch a vendored engine asset through the service worker (precache) and
- * return it as a same-origin Blob URL. The tesseract worker loads its core
- * via importScripts, which is NOT intercepted by the service worker — so we
- * fetch the bytes ourselves and hand the worker blob: URLs. That keeps the
- * whole engine usable fully offline after the first visit.
- */
-async function fetchAsBlobUrl(name: string): Promise<string> {
-  const res = await fetch(assetUrl(name))
-  if (!res.ok) {
-    throw new Error(`Failed to load OCR asset ${name} (HTTP ${res.status})`)
-  }
-  return URL.createObjectURL(await res.blob())
-}
-
-/**
  * Lazily create (and reuse) the single Tesseract worker, configured for
  * exactly one line of digits. Resolves when the engine is fully loaded and
  * initialised (core + english traineddata), so the first `recognizeCrop`
  * call is guaranteed to succeed.
+ *
+ * All assets are same-origin URLs served by the Workbox precache. The
+ * tesseract worker is created from this page, so its top-level script, its
+ * `importScripts` of the core, and its language-data fetch are all
+ * intercepted by the service worker once this page is controlled — keeping
+ * the whole engine usable fully offline (verified in a headless-browser
+ * test with the network disabled).
+ *
+ * Note: do NOT pass the core as a blob: URL. Tesseract treats a corePath
+ * as a *file* only when it ends in ".js", otherwise as a directory it
+ * appends the SIMD filename to — which breaks blob: URLs at importScripts.
  */
 export async function initOcrEngine(
   onProgress?: (progress: number) => void,
@@ -76,16 +72,13 @@ export async function initOcrEngine(
       // SIMD cores are ~2x faster; fall back to the plain LSTM core on
       // older devices that lack WebAssembly SIMD.
       const coreName = hasSimd ? CORE_SIMD : CORE_LEGACY
-      const [workerUrl, coreUrl] = await Promise.all([
-        fetchAsBlobUrl('worker.min.js'),
-        fetchAsBlobUrl(coreName),
-      ])
 
       const worker = await createWorker('eng', OEM.LSTM_ONLY, {
-        workerPath: workerUrl,
-        corePath: coreUrl,
+        workerPath: assetUrl('worker.min.js'),
+        // An explicit file (ends .js): Tesseract importScripts it directly.
+        corePath: assetUrl(coreName),
         // Tesseract fetches <lang>.traineddata.gz from this directory with a
-        // normal fetch() — which the service worker precache does intercept.
+        // normal fetch() inside its (controlled) worker.
         langPath: assetUrl(''),
         gzip: true,
         workerBlobURL: false,

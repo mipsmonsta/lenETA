@@ -99,9 +99,11 @@ PWA.
   (`tessedit_char_whitelist=0123456789`, page-segmentation mode 7). The raw
   output is filtered down to digits; a reading is accepted only when it is
   exactly 5 digits, passes a confidence gate, appears in at least 2 of the last
-  4 frames, and validates against the stop dataset. The engine core is fetched
-  through the service worker and handed to Tesseract as a Blob URL, so the
-  whole pipeline runs fully offline after the first visit.
+  4 frames, and validates against the stop dataset. The engine's worker script,
+  WASM core, and language data are served same-origin from the Workbox
+  precache; the worker's `importScripts` and fetches are intercepted by the
+  service worker once the page is controlled, so the whole pipeline runs fully
+  offline after the first visit.
 - **Arrivals**: the stop code is sent to `https://arrivelah2.busrouter.sg/?id=…`
   (cheeaun's open-source proxy of LTA's DataMall `BusArrival` API, cached 15s).
 - **Stop names**: `public/stops.json` is generated from
