@@ -80,8 +80,8 @@ export default function HomeScreen({
   return (
     <div className="screen home">
       <header className="app-header">
-        <h1>lenETA</h1>
-        <p>Scan a bus stop code to see live bus arrivals.</p>
+        <h1>lenETA 🇸🇬</h1>
+        <p>Scan a bus stop code for live Singapore public bus arrivals.</p>
       </header>
 
       <div className="actions">

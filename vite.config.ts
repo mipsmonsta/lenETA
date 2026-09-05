@@ -14,7 +14,7 @@ export default defineConfig({
       manifest: {
         name: 'lenETA - SG Bus Stop Scanner',
         short_name: 'lenETA',
-        description: 'Scan a bus stop code to see real-time bus arrivals in Singapore.',
+        description: 'Scan a Singapore public-bus stop code to see real-time bus arrivals.',
         theme_color: '#0b2545',
         background_color: '#0b2545',
         display: 'standalone',
