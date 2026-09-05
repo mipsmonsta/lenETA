@@ -24,6 +24,12 @@ export function minsUntil(
   return Math.round((t - now) / 60000)
 }
 
+/** True when the arrival is due essentially right now (<= 1 min away). */
+export function etaIsNow(arrival: ArriveLahArrival | null, now = Date.now()): boolean {
+  const mins = minsUntil(arrival, now)
+  return mins !== null && mins <= 1
+}
+
 /**
  * True when the arrival is NOT live-tracked (no GPS), so its time comes from
  * the operating timetable rather than a live estimate. LTA returns
@@ -69,6 +75,20 @@ export function formatEta(
   if (mins === null) return '-'
   if (mins <= 1) return 'Arriving'
   return `${mins} min`
+}
+
+/**
+ * Label for an arrival slot. For scheduled trips, a trip due "now" per the
+ * schedule reads "Arriving" (it is still a planned time — callers mark it
+ * with the clock icon), while future scheduled times show their exact clock
+ * time. Live trips keep their countdown.
+ */
+export function etaLabel(
+  arrival: ArriveLahArrival | null,
+  now = Date.now(),
+): string {
+  if (!isScheduled(arrival)) return formatEta(arrival, now)
+  return etaIsNow(arrival, now) ? 'Arriving' : formatEta(arrival, now)
 }
 
 export function averageHeadwayMinutes(service: ArriveLahService): number | null {

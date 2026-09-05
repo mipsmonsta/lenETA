@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useArrivals } from '../hooks/useArrivals'
 import { useStops } from '../hooks/useStops'
-import { sortServices } from '../lib/arrivals'
+import { isScheduled, sortServices } from '../lib/arrivals'
 import ServiceRow from './ServiceRow'
+import ClockIcon from './ClockIcon'
 
 export default function StopResults({
   code,
@@ -26,6 +27,11 @@ export default function StopResults({
 
   const stop = stops?.get(code) ?? null
   const services = data ? sortServices(data.services, now) : []
+  const hasScheduled = data
+    ? data.services.some((s) =>
+        [s.next, s.next2, s.next3].some((a) => a != null && isScheduled(a)),
+      )
+    : false
   const lastUpdated = updatedAt
     ? new Date(updatedAt).toLocaleTimeString()
     : null
@@ -75,6 +81,17 @@ export default function StopResults({
         <p className="hint">
           No buses in operation at this stop right now.
         </p>
+      )}
+
+      {services.length > 0 && hasScheduled && (
+        <div className="notice info" role="note">
+          <ClockIcon />
+          <span>
+            Clock times are planned — these trips are due per schedule and have
+            not started; the bus may not come, subject to operational
+            adjustments. Live buses show “Arriving” or “N min”.
+          </span>
+        </div>
       )}
 
       {services.length > 0 && (

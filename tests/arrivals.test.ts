@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  etaIsNow,
+  etaLabel,
   formatEta,
   formatSgtTime,
   isScheduled,
@@ -83,5 +85,29 @@ describe('scheduled (monitored: 0) arrivals show exact SG clock time', () => {
     const a = arrival({ time: new Date(NOW + 12 * 60000).toISOString() })
     expect(minsUntil(a, NOW)).toBe(12)
     expect(minsUntil(null, NOW)).toBeNull()
+  })
+
+  it('etaIsNow flags arrivals due within a minute', () => {
+    const due = arrival({ time: new Date(NOW + 30_000).toISOString(), monitored: 1 })
+    expect(etaIsNow(due, NOW)).toBe(true)
+    const in12 = arrival({ time: new Date(NOW + 12 * 60000).toISOString(), monitored: 1 })
+    expect(etaIsNow(in12, NOW)).toBe(false)
+    expect(etaIsNow(null, NOW)).toBe(false)
+    expect(etaIsNow(arrival({ time: 'bad' }), NOW)).toBe(false)
+  })
+
+  it('etaLabel: scheduled-due-now reads Arriving, future scheduled reads clock', () => {
+    const dueSched = arrival({
+      time: '2026-09-05T14:00:30+08:00', // 30s after NOW
+      monitored: 0,
+    })
+    expect(etaLabel(dueSched, NOW)).toBe('Arriving')
+    const laterSched = arrival({ time: '2026-09-05T14:30:00+08:00', monitored: 0 })
+    expect(etaLabel(laterSched, NOW)).toBe('14:30')
+    // Live rows keep the relative label.
+    const live = arrival({ time: new Date(NOW + 30_000).toISOString(), monitored: 1 })
+    expect(etaLabel(live, NOW)).toBe('Arriving')
+    const liveLater = arrival({ time: new Date(NOW + 12 * 60000).toISOString(), monitored: 1 })
+    expect(etaLabel(liveLater, NOW)).toBe('12 min')
   })
 })

@@ -1,5 +1,13 @@
-import { averageHeadwayMinutes, formatEta, LOAD_LABELS, OPERATOR_LABELS } from '../lib/arrivals'
-import type { ArriveLahService } from '../types'
+import {
+  averageHeadwayMinutes,
+  etaLabel,
+  formatEta,
+  isScheduled,
+  LOAD_LABELS,
+  OPERATOR_LABELS,
+} from '../lib/arrivals'
+import type { ArriveLahArrival, ArriveLahService } from '../types'
+import ClockIcon from './ClockIcon'
 
 export default function ServiceRow({
   service,
@@ -16,6 +24,23 @@ export default function ServiceRow({
   const next = service.next
   const headway = averageHeadwayMinutes(service)
 
+  /**
+   * A scheduled (monitored: 0) trip has not started — its time is planned.
+   * Mark it with a clock icon, and when it is due "now" per the schedule,
+   * say "Arriving" only alongside the clock so it is clearly not a live bus.
+   */
+  const renderEta = (a: ArriveLahArrival | null) => {
+    if (!a) return null
+    if (!isScheduled(a)) return formatEta(a, now)
+    const text = etaLabel(a, now)
+    return (
+      <span className="sched-eta">
+        <ClockIcon />
+        {text}
+      </span>
+    )
+  }
+
   return (
     <li className="service">
       <div className="service-no">
@@ -28,12 +53,12 @@ export default function ServiceRow({
         </span>
       </div>
       <div className="service-eta">
-        <div className="next">{formatEta(next, now)}</div>
+        <div className="next">{renderEta(next)}</div>
         {arrivals.length > 1 && (
           <div className="subs">
             {arrivals.slice(1).map((a, i) => (
               <span key={i} className={i > 1 ? 'dim' : ''}>
-                {formatEta(a, now)}
+                {renderEta(a)}
               </span>
             ))}
           </div>
