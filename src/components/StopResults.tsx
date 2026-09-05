@@ -87,9 +87,10 @@ export default function StopResults({
         <div className="notice info" role="note">
           <ClockIcon />
           <span>
-            Clock times are planned — these trips are due per schedule and have
-            not started; the bus may not come, subject to operational
-            adjustments. Live buses show “Arriving” or “N min”.
+            “Arriving” with a clock icon, or exact times, are scheduled times —
+            buses may not arrive as scheduled, subject to operational
+            adjustments. Live buses are shown in “N min” format or “Arriving”
+            (without a clock icon).
           </span>
         </div>
       )}
