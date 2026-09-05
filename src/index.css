@@ -80,6 +80,83 @@ button {
   padding: 24px 0 8px;
 }
 
+/* First-time "how to scan" guide card */
+.guide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 6px 0 2px;
+}
+
+.guide-card-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.guide-diagram {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.guide-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  counter-reset: guide;
+}
+
+.guide-steps li {
+  counter-increment: guide;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.guide-steps li::before {
+  content: counter(guide);
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.guide-card .btn {
+  width: 100%;
+}
+
+.guide-link {
+  align-self: center;
+  margin: 8px 0 0;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

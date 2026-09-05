@@ -1,6 +1,7 @@
 import type { FavoriteStop, Stop } from '../types'
 
 const KEY = 'lenETA:favorites'
+const GUIDE_KEY = 'lenETA:scanGuideDone'
 
 export function getFavorites(): FavoriteStop[] {
   try {
@@ -39,4 +40,24 @@ export function removeFavorite(list: FavoriteStop[], code: string): FavoriteStop
 
 export function isFavorite(list: FavoriteStop[], code: string): boolean {
   return list.some((f) => f.code === code)
+}
+
+/**
+ * Whether the first-time "how to scan" guide has been completed (either
+ * dismissed with "Got it" or auto-completed by a first successful scan).
+ */
+export function isScanGuideDone(): boolean {
+  try {
+    return localStorage.getItem(GUIDE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markScanGuideDone(): void {
+  try {
+    localStorage.setItem(GUIDE_KEY, '1')
+  } catch {
+    // storage unavailable; ignore
+  }
 }
