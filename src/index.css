@@ -193,6 +193,8 @@ button {
   flex: 1;
   overflow: hidden;
   background: #000;
+  /* Let the app handle pinch & double-tap for camera zoom (no page zoom). */
+  touch-action: none;
 }
 
 .camera-wrap video {
@@ -201,6 +203,7 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  will-change: transform;
 }
 
 .guide-box {
@@ -209,6 +212,51 @@ button {
   border-radius: 12px;
   box-shadow: 0 0 0 100vmax rgba(5, 15, 30, 0.45);
   pointer-events: none;
+  z-index: 2;
+}
+
+.zoom-controls {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 4;
+  pointer-events: none;
+}
+.zoom-btn {
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(5, 15, 30, 0.55);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+.zoom-btn:disabled {
+  opacity: 0.35;
+}
+.zoom-btn:active {
+  background: rgba(5, 15, 30, 0.85);
+}
+.zoom-value {
+  pointer-events: none;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(5, 15, 30, 0.5);
+  border-radius: 10px;
+  padding: 2px 7px;
+  font-family: var(--mono);
 }
 
 .ocr-preview {
@@ -313,6 +361,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Non-interactive overlay: touches below the status area drive zoom. */
+  pointer-events: none;
 }
 
 .progress {
