@@ -154,9 +154,163 @@ export function extractCode(text: string): string | null {
   return digits.length === 5 ? digits : null
 }
 
+// --- word/row-aware 5-digit candidate selection -------------------------
+//
+// Bus-pole frames often contain a description row below the code (road
+// names, bus-service numbers …). Naively requiring the *whole crop* to
+// contain exactly 5 digits discards such frames. Instead we locate the
+// 5-digit *token* among the OCR words/lines and read it back on its own.
+
+export interface OcrWord {
+  text: string
+  confidence: number
+  bbox: { x0: number; y0: number; x1: number; y1: number }
+}
+
+export interface OcrLine {
+  text: string
+  confidence: number
+  bbox: { x0: number; y0: number; x1: number; y1: number } | null
+  words: OcrWord[]
+}
+
+export interface CodeCandidate {
+  code: string
+  confidence: number
+  bbox: OcrWord['bbox']
+}
+
+const digitsOnly = (t: string | undefined | null) => (t ?? '').replace(/\D/g, '')
+const boxH = (b: OcrWord['bbox']) => b.y1 - b.y0
+
+/** Flatten Tesseract's blocks → paragraphs → lines → words. */
+export function flattenOcrLines(data: unknown): OcrLine[] {
+  const blocks = (
+    data as { blocks?: { paragraphs?: { lines?: OcrLine[] }[] }[] } | null
+  )?.blocks
+  if (!blocks) return []
+  const out: OcrLine[] = []
+  for (const b of blocks) {
+    for (const p of b.paragraphs ?? []) {
+      for (const l of p.lines ?? []) {
+        if (!l.words?.length) continue
+        const words = l.words.filter(
+          (w) => w.bbox && typeof w.text === 'string',
+        )
+        if (!words.length) continue
+        out.push(l)
+      }
+    }
+  }
+  return out
+}
+
 /**
- * Recognise the guide-box region of the current video frame. Returns null
- * when no usable reading came back (engine not ready is the caller's job).
+ * Find the most plausible 5-digit stop-code token in the OCR layout.
+ * Looks for single OCR words that are exactly five digits (letters around
+ * the code are already suppressed by the digit whitelist). Among candidates
+ * it prefers the best confidence and the tallest, most centrally-located
+ * text — the code plaque is the dominant digit row, while a description row
+ * below carries only short numbers (bus services, distances).
+ */
+export function selectCodeCandidate(
+  lines: OcrLine[],
+  viewport: { width: number; height: number },
+): CodeCandidate | null {
+  const candidates: CodeCandidate[] = []
+  const add = (code: string, confidence: number, bbox: OcrWord['bbox']) => {
+    if (code.length === 5 && confidence >= 0.3) {
+      candidates.push({ code, confidence, bbox })
+    }
+  }
+
+  for (const line of lines) {
+    for (const w of line.words) {
+      add(digitsOnly(w.text), w.confidence / 100, w.bbox)
+    }
+  }
+
+  if (candidates.length === 0) return null
+  const maxH = Math.max(...candidates.map((c) => Math.max(1, boxH(c.bbox))))
+  let best: CodeCandidate | null = null
+  let bestScore = -Infinity
+  for (const c of candidates) {
+    // Confidence dominates; taller & more central text breaks ties.
+    const heightScore = 1.5 * (boxH(c.bbox) / maxH)
+    const cy = (c.bbox.y0 + c.bbox.y1) / 2
+    const offCentre = Math.min(1, Math.abs(cy - viewport.height / 2) / (viewport.height / 2))
+    const centreScore = 0.5 * (1 - offCentre)
+    const s = c.confidence * 6 + heightScore + centreScore
+    if (s > bestScore) {
+      bestScore = s
+      best = c
+    }
+  }
+  return best
+}
+
+async function setPsm(engine: OcrEngine, psm: PSM): Promise<void> {
+  await engine.setParameters({ tessedit_pageseg_mode: psm })
+}
+
+const FAST_SINGLE_LINE_CONF = 0.9
+
+/** Re-read just the candidate's region as a single clean line. */
+async function refineCandidate(
+  engine: OcrEngine,
+  src: HTMLCanvasElement,
+  bbox: OcrWord['bbox'],
+): Promise<{ text: string; confidence: number; code: string | null } | null> {
+  const pad = Math.max(2, Math.round(boxH(bbox) * 0.2))
+  const sx = Math.max(0, Math.floor(bbox.x0) - pad)
+  const sy = Math.max(0, Math.floor(bbox.y0) - pad)
+  const sw = Math.min(src.width - sx, Math.ceil(bbox.x1 - bbox.x0) + pad * 2)
+  const sh = Math.min(src.height - sy, Math.ceil(bbox.y1 - bbox.y0) + pad * 2)
+  if (sw <= 0 || sh <= 0) return null
+
+  const sub = document.createElement('canvas')
+  sub.width = sw
+  sub.height = sh
+  const sctx = sub.getContext('2d')!
+  sctx.drawImage(src, sx, sy, sw, sh, 0, 0, sw, sh)
+
+  // Ensure the lone digits are tall enough for the LSTM.
+  const scale = Math.min(
+    MAX_UPSCALE,
+    Math.max(1, Math.ceil(TARGET_CROP_HEIGHT / sh)),
+  )
+  const out =
+    scale === 1
+      ? sub
+      : (() => {
+          const c = document.createElement('canvas')
+          c.width = sw * scale
+          c.height = sh * scale
+          const ctx = c.getContext('2d')!
+          ctx.imageSmoothingQuality = 'high'
+          ctx.drawImage(sub, 0, 0, c.width, c.height)
+          return c
+        })()
+
+  await setPsm(engine, PSM.SINGLE_LINE)
+  const res = await engine.recognize(out)
+  const data = res.data
+  if (typeof data.text !== 'string') return null
+  return {
+    text: data.text,
+    confidence: (data.confidence ?? 0) / 100,
+    code: extractCode(data.text),
+  }
+}
+
+/**
+ * Recognise the guide-box region of the current video frame.
+ *
+ * Two-pass pipeline for crops that also contain description text (usually a
+ * separate row below the code):
+ *   1. locate — block page-segmentation, then pick the 5-digit word/row
+ *   2. refine — re-read just that region as one clean line
+ * When the crop is a single clean line already, pass 2 is skipped.
  */
 export async function recognizeRegion(
   engine: OcrEngine,
@@ -165,12 +319,37 @@ export async function recognizeRegion(
 ): Promise<OcrReading | null> {
   if (rect.width <= 0 || rect.height <= 0 || !video.videoWidth) return null
   const crop = cropRegion(video, rect)
-  const { data } = await engine.recognize(crop)
-  if (!data || typeof data.text !== 'string') return null
-  return {
-    crop,
-    text: data.text,
-    confidence: (data.confidence ?? 0) / 100,
-    code: extractCode(data.text),
+  if (!crop.width || !crop.height) return null
+
+  // Pass 1 — locate rows & words (block mode keeps the code row separate
+  // from a description row instead of PSM 7 fusing them into one line).
+  await setPsm(engine, PSM.SINGLE_BLOCK)
+  const r1 = await engine.recognize(crop, {}, { text: true, blocks: true })
+  const data = r1.data as unknown
+  const text1 = typeof (data as { text?: unknown }).text === 'string'
+    ? ((data as { text: string }).text)
+    : ''
+  const pageConf = ((data as { confidence?: number }).confidence ?? 0) / 100
+  const lines = flattenOcrLines(data)
+  const cand = selectCodeCandidate(lines, {
+    width: crop.width,
+    height: crop.height,
+  })
+
+  if (!cand) {
+    // Nothing usable in block mode — legacy single-line attempt.
+    return { crop, text: text1, confidence: pageConf, code: extractCode(text1) }
   }
+
+  // Fast path: a single high-confidence line needs no refinement.
+  if (lines.length <= 1 && cand.confidence >= FAST_SINGLE_LINE_CONF) {
+    return { crop, text: text1, confidence: cand.confidence, code: cand.code }
+  }
+
+  // Pass 2 — re-read just the candidate region as one clean line.
+  const refined = await refineCandidate(engine, crop, cand.bbox)
+  if (refined?.code) {
+    return { crop, text: refined.text, confidence: refined.confidence, code: refined.code }
+  }
+  return { crop, text: text1, confidence: cand.confidence, code: cand.code }
 }
