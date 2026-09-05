@@ -114,3 +114,35 @@ export function sortServices(
     return am - bm
   })
 }
+
+/**
+ * Natural compare for SG bus service numbers: numeric part first, then any
+ * letter suffix. Gives 2, 3, 15, 22, 63, 63M, 143, 854, 966 (not
+ * alphabetically, which would put "15" before "2"). Base services sort
+ * before their variants (63 before 63M).
+ */
+export function compareServiceNo(a: string, b: string): number {
+  const chunks = (s: string) => s.match(/\d+|\D+/g) ?? [s]
+  const ca = chunks(a)
+  const cb = chunks(b)
+  for (let i = 0; i < Math.max(ca.length, cb.length); i++) {
+    if (i >= ca.length) return -1 // a ended first -> base before variant
+    if (i >= cb.length) return 1
+    const x = ca[i]
+    const y = cb[i]
+    const xn = /^\d+$/.test(x)
+    const yn = /^\d+$/.test(y)
+    if (xn && yn) {
+      const d = parseInt(x, 10) - parseInt(y, 10)
+      if (d !== 0) return d
+    } else if (x !== y) {
+      return x < y ? -1 : 1
+    }
+  }
+  return 0
+}
+
+/** Stable ordering of services by their number (see compareServiceNo). */
+export function sortServicesByNo(services: ArriveLahService[]): ArriveLahService[] {
+  return [...services].sort((a, b) => compareServiceNo(a.no, b.no))
+}

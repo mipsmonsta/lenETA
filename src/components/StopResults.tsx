@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useArrivals } from '../hooks/useArrivals'
 import { useStops } from '../hooks/useStops'
-import { isScheduled, sortServices } from '../lib/arrivals'
+import { isScheduled, sortServicesByNo } from '../lib/arrivals'
 import ServiceRow from './ServiceRow'
 import ClockIcon from './ClockIcon'
 
@@ -26,7 +26,7 @@ export default function StopResults({
   }, [])
 
   const stop = stops?.get(code) ?? null
-  const services = data ? sortServices(data.services, now) : []
+  const services = data ? sortServicesByNo(data.services) : []
   const hasScheduled = data
     ? data.services.some((s) =>
         [s.next, s.next2, s.next3].some((a) => a != null && isScheduled(a)),

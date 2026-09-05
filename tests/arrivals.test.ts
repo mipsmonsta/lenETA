@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  compareServiceNo,
   etaIsNow,
   etaLabel,
   formatEta,
   formatSgtTime,
   isScheduled,
   minsUntil,
+  sortServicesByNo,
 } from '../src/lib/arrivals'
-import type { ArriveLahArrival } from '../src/types'
+import type { ArriveLahArrival, ArriveLahService } from '../src/types'
 
 const NOW = Date.parse('2026-09-05T14:00:00+08:00')
 
@@ -109,5 +111,38 @@ describe('scheduled (monitored: 0) arrivals show exact SG clock time', () => {
     expect(etaLabel(live, NOW)).toBe('Arriving')
     const liveLater = arrival({ time: new Date(NOW + 12 * 60000).toISOString(), monitored: 1 })
     expect(etaLabel(liveLater, NOW)).toBe('12 min')
+  })
+})
+
+describe('service-number ordering (natural sort)', () => {
+  it('sorts numerically, not alphabetically', () => {
+    const sorted = ['966', '2', '854', '63M', '15', '3', '63', '22'].sort(compareServiceNo)
+    expect(sorted).toEqual(['2', '3', '15', '22', '63', '63M', '854', '966'])
+  })
+
+  it('puts base services before their letter variants', () => {
+    const sorted = ['143A', '143', '63M', '63'].sort(compareServiceNo)
+    expect(sorted).toEqual(['63', '63M', '143', '143A'])
+  })
+
+  it('is a stable sort', () => {
+    // Duplicate keys keep their relative order.
+    const input = ['22b', '22a', '22b', '15']
+    expect(input.slice().sort(compareServiceNo)).toEqual(['15', '22a', '22b', '22b'])
+  })
+
+  it('sortServicesByNo orders a service list and does not mutate input', () => {
+    const svc = (no: string): ArriveLahService => ({
+      no,
+      operator: 'SBST',
+      next: null,
+      next2: null,
+      next3: null,
+      subsequent: null,
+    })
+    const input = [svc('966'), svc('2'), svc('15')]
+    const out = sortServicesByNo(input)
+    expect(out.map((s) => s.no)).toEqual(['2', '15', '966'])
+    expect(input.map((s) => s.no)).toEqual(['966', '2', '15']) // unchanged
   })
 })
