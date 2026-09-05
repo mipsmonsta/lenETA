@@ -3,7 +3,7 @@ import type { FavoriteStop } from '../types'
 import FavoriteCard from './FavoriteCard'
 
 const STEPS = [
-  'On the bus stop pole, find the 5-digit number — usually on a yellow & cream sign.',
+  'On the bus stop pole, find the 5-digit number — usually on a green LTA plate.',
   'Tap "Scan bus stop code" and point the camera at the code.',
   'Keep the digits inside the guide box — pinch to zoom if the code is small.',
   'The app reads it automatically and shows live bus arrivals.',
@@ -33,9 +33,8 @@ function ScanDiagram() {
         strokeWidth="2"
         strokeDasharray="7 5"
       />
-      {/* bus-stop plaque with the code */}
-      <rect x="86" y="46" width="148" height="40" rx="7" fill="#f2b705" />
-      <rect x="91" y="51" width="138" height="30" rx="4" fill="#f7f4ec" />
+      {/* bus-stop code plate — LTA's Lush Green unified signage */}
+      <rect x="82" y="46" width="156" height="40" rx="7" fill="#0e8a3f" stroke="rgba(255,255,255,0.35)" />
       <text
         x="160"
         y="73"
@@ -43,7 +42,7 @@ function ScanDiagram() {
         fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
         fontSize="24"
         fontWeight="700"
-        fill="#0b2545"
+        fill="#ffffff"
         letterSpacing="2"
       >
         04229
