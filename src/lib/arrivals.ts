@@ -78,6 +78,22 @@ export function formatEta(
 }
 
 /**
+ * Compact ETA for the service rail: `10m`, `Now` when the bus is due, an exact
+ * clock time for scheduled (timetable) trips, or `-` when there is no arrival.
+ */
+export function compactEta(
+  arrival: ArriveLahArrival | null,
+  now = Date.now(),
+): string {
+  if (!arrival?.time) return '-'
+  if (isScheduled(arrival)) return formatSgtTime(arrival.time) ?? '-'
+  const mins = minsUntil(arrival, now)
+  if (mins === null) return '-'
+  if (mins <= 1) return 'Now'
+  return `${mins}m`
+}
+
+/**
  * Label for an arrival slot. For scheduled trips, a trip due "now" per the
  * schedule reads "Arriving" (it is still a planned time — callers mark it
  * with the clock icon), while future scheduled times show their exact clock

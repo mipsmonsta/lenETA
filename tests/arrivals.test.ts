@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  compactEta,
   compareServiceNo,
   etaIsNow,
   etaLabel,
@@ -144,5 +145,29 @@ describe('service-number ordering (natural sort)', () => {
     const out = sortServicesByNo(input)
     expect(out.map((s) => s.no)).toEqual(['2', '15', '966'])
     expect(input.map((s) => s.no)).toEqual(['966', '2', '15']) // unchanged
+  })
+})
+
+describe('compactEta for the service rail', () => {
+  it('shortens a live countdown', () => {
+    const in12 = arrival({ time: new Date(NOW + 12 * 60000).toISOString() })
+    expect(compactEta(in12, NOW)).toBe('12m')
+  })
+
+  it('reads Now when the bus is due', () => {
+    const due = arrival({ time: new Date(NOW + 30_000).toISOString() })
+    expect(compactEta(due, NOW)).toBe('Now')
+  })
+
+  it('keeps the exact clock time for scheduled trips', () => {
+    const sched = arrival({ time: '2026-09-05T14:30:00+08:00', monitored: 0 })
+    expect(compactEta(sched, NOW)).toBe('14:30')
+  })
+
+  it('falls back to a dash when there is no usable arrival', () => {
+    expect(compactEta(null, NOW)).toBe('-')
+    expect(compactEta(arrival({ time: '' }), NOW)).toBe('-')
+    expect(compactEta(arrival({ time: 'bad' }), NOW)).toBe('-')
+    expect(compactEta(arrival({ time: 'bad', monitored: 0 }), NOW)).toBe('-')
   })
 })
