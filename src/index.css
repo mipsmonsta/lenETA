@@ -55,6 +55,7 @@ button {
 }
 
 .app-header {
+  position: relative;
   text-align: center;
   padding: 24px 0 8px;
 }
@@ -696,4 +697,108 @@ button {
   font-size: 11px;
   color: var(--ok);
   margin-top: 2px;
+}
+
+/* Settings */
+.settings-btn {
+  position: absolute;
+  top: 24px;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-dim);
+}
+
+.settings-btn:active {
+  color: var(--accent);
+}
+
+.settings-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.setting-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.setting-name {
+  font-weight: 600;
+}
+
+.setting-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.setting-toggle {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.setting-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.setting-toggle:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.setting-toggle:checked::after {
+  transform: translateX(18px);
+  background: var(--accent-ink);
+}
+
+.setting-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

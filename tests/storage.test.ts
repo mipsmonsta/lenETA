@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isScanGuideDone, markScanGuideDone } from '../src/lib/storage'
+import {
+  getOcrDebugChoice,
+  isScanGuideDone,
+  markScanGuideDone,
+  setOcrDebugChoice,
+} from '../src/lib/storage'
 
 function stubStorage(store: Record<string, string>, throwOnSet = false) {
   const mem = store
@@ -45,5 +50,42 @@ describe('first-time scan guide persistence', () => {
     delete (globalThis as { localStorage?: unknown }).localStorage
     expect(isScanGuideDone()).toBe(false)
     expect(() => markScanGuideDone()).not.toThrow()
+  })
+})
+
+describe('OCR debug preference persistence', () => {
+  it('reports no choice when nothing is stored', () => {
+    stubStorage({})
+    expect(getOcrDebugChoice()).toBeNull()
+  })
+
+  it('reads a stored on/off choice', () => {
+    stubStorage({ 'lenETA:ocrDebug': '1' })
+    expect(getOcrDebugChoice()).toBe(true)
+    stubStorage({ 'lenETA:ocrDebug': '0' })
+    expect(getOcrDebugChoice()).toBe(false)
+  })
+
+  it('treats an unrecognised value as no choice', () => {
+    stubStorage({ 'lenETA:ocrDebug': 'yes' })
+    expect(getOcrDebugChoice()).toBeNull()
+  })
+
+  it('persists the choice', () => {
+    const store: Record<string, string> = {}
+    stubStorage(store)
+    setOcrDebugChoice(true)
+    expect(store['lenETA:ocrDebug']).toBe('1')
+    setOcrDebugChoice(false)
+    expect(store['lenETA:ocrDebug']).toBe('0')
+  })
+
+  it('degrades safely when storage is unavailable', () => {
+    stubStorage({}, true)
+    expect(() => setOcrDebugChoice(true)).not.toThrow()
+    stubStorage({})
+    delete (globalThis as { localStorage?: unknown }).localStorage
+    expect(getOcrDebugChoice()).toBeNull()
+    expect(() => setOcrDebugChoice(false)).not.toThrow()
   })
 })

@@ -6,7 +6,6 @@ import {
   type OcrEngine,
 } from '../lib/ocrEngine'
 import type { Rect } from '../lib/geometry'
-import { ENABLE_OCR_DEBUG } from '../lib/debug'
 
 export interface ScanStatus {
   reading: string
@@ -58,6 +57,8 @@ export function useOcr(opts: {
   onDetected: (code: string) => void
   onStatus?: (status: ScanStatus) => void
   validate?: (code: string) => boolean
+  /** Collect the DEV-only diagnostics (raw crop, raw text) for the debug panel. */
+  debug?: boolean
 }) {
   const onDetectedRef = useRef(opts.onDetected)
   onDetectedRef.current = opts.onDetected
@@ -65,6 +66,9 @@ export function useOcr(opts: {
   onStatusRef.current = opts.onStatus
   const validateRef = useRef(opts.validate)
   validateRef.current = opts.validate
+  // Read through a ref so toggling the debug panel never restarts the OCR loop.
+  const debugRef = useRef(opts.debug)
+  debugRef.current = opts.debug
 
   useEffect(() => {
     if (!opts.enabled || !opts.guide) return
@@ -146,7 +150,7 @@ export function useOcr(opts: {
           }
         }
 
-        if (ENABLE_OCR_DEBUG) {
+        if (debugRef.current) {
           DEBUG_REFS.current = {
             crop: preview,
             rawText,
@@ -160,9 +164,9 @@ export function useOcr(opts: {
           confidence,
           loading: false,
           progress: 1,
-          preview: ENABLE_OCR_DEBUG ? preview : undefined,
-          rawText: ENABLE_OCR_DEBUG ? rawText : undefined,
-          recognized: ENABLE_OCR_DEBUG ? recognized : undefined,
+          preview: debugRef.current ? preview : undefined,
+          rawText: debugRef.current ? rawText : undefined,
+          recognized: debugRef.current ? recognized : undefined,
         })
       } catch {
         emit({

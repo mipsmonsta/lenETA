@@ -3,7 +3,6 @@ import { useCamera } from '../hooks/useCamera'
 import { useOcr, DEBUG_REFS, type ScanStatus } from '../hooks/useOcr'
 import { containerBoxToVideoRect, zoomRectAbout, type Rect } from '../lib/geometry'
 import { loadStops } from '../lib/stops'
-import { ENABLE_OCR_DEBUG } from '../lib/debug'
 import type { Stop } from '../types'
 
 /** Digital zoom bounds: 1× = full frame; 4× is plenty for a pole-mounted code. */
@@ -19,10 +18,13 @@ export default function ScanScreen({
   onDetected,
   onManual,
   onClose,
+  ocrDebug,
 }: {
   onDetected: (code: string) => void
   onManual: () => void
   onClose: () => void
+  /** Whether the OCR diagnostics overlay is enabled (Settings → OCR debug panel). */
+  ocrDebug: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLCanvasElement | null>(null)
@@ -209,6 +211,7 @@ export default function ScanScreen({
     onDetected,
     onStatus: setStatus,
     validate: (code) => stops?.has(code) ?? false,
+    debug: ocrDebug,
   })
 
   // DEV-only: show the exact crop the OCR engine saw.
@@ -280,11 +283,11 @@ export default function ScanScreen({
           }}
         />
         {box && <div className="guide-box" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
-        {ENABLE_OCR_DEBUG && (
+        {ocrDebug && (
           <canvas ref={previewRef} className="ocr-preview" />
         )}
 
-        {ENABLE_OCR_DEBUG && !error && (
+        {ocrDebug && !error && (
           <div className="scan-debug">
             <div className="scan-debug-head">
               <span className="scan-debug-title">OCR debug</span>

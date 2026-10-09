@@ -51,10 +51,17 @@ first missing.
 
 ### Debugging OCR on a real device
 
-The `dev` build shows an **OCR debug panel** on the scan screen. It displays
-the current 5-digit reading, the engine confidence, and Tesseract's **raw
-output text** so you can tell at a glance whether a miss is an image-quality
-problem (blur, glare, digits too small) or a genuine misread of a clean crop.
+The **OCR debug panel** on the scan screen is **off by default in production**
+and on in `dev` builds. Enable it per device from the home screen's
+**Settings** (⚙) → **OCR debug panel**; the choice is stored in `localStorage`
+(`lenETA:ocrDebug`) and always overrides the build default. A build can also
+force the default on with `VITE_ENABLE_OCR_DEBUG=true` while no user choice is
+stored (handy for shipping one diagnostic build to a phone).
+
+The panel displays the current 5-digit reading, the engine confidence, and
+Tesseract's **raw output text** so you can tell at a glance whether a miss is
+an image-quality problem (blur, glare, digits too small) or a genuine misread
+of a clean crop.
 
 To capture a frame for offline analysis tap **Save frame** while holding a
 stop in the guide box. It downloads a `leneta-debug-<ts>.json` containing the

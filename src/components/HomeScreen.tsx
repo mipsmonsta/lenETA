@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FavoriteStop } from '../types'
 import FavoriteCard from './FavoriteCard'
+import SettingsIcon from './SettingsIcon'
 
 const STEPS = [
   'On the bus stop pole, find the 5-digit number — usually on a green LTA plate.',
@@ -59,6 +60,7 @@ export default function HomeScreen({
   onScan,
   onManual,
   onRemove,
+  onSettings,
 }: {
   favorites: FavoriteStop[]
   /** Whether the first-time guide has been completed (dismissed or scanned). */
@@ -68,6 +70,7 @@ export default function HomeScreen({
   onScan: () => void
   onManual: () => void
   onRemove: (code: string) => void
+  onSettings: () => void
 }) {
   const [showHelp, setShowHelp] = useState(false)
   const showCard = showHelp || !guideDone
@@ -80,6 +83,15 @@ export default function HomeScreen({
   return (
     <div className="screen home">
       <header className="app-header">
+        <button
+          type="button"
+          className="settings-btn"
+          aria-label="Settings"
+          title="Settings"
+          onClick={onSettings}
+        >
+          <SettingsIcon />
+        </button>
         <h1>lenETA 🇸🇬</h1>
         <p>Scan a bus stop code for live Singapore public bus arrivals.</p>
       </header>

@@ -2,6 +2,7 @@ import type { FavoriteStop, Stop } from '../types'
 
 const KEY = 'lenETA:favorites'
 const GUIDE_KEY = 'lenETA:scanGuideDone'
+const OCR_DEBUG_KEY = 'lenETA:ocrDebug'
 
 export function getFavorites(): FavoriteStop[] {
   try {
@@ -57,6 +58,30 @@ export function isScanGuideDone(): boolean {
 export function markScanGuideDone(): void {
   try {
     localStorage.setItem(GUIDE_KEY, '1')
+  } catch {
+    // storage unavailable; ignore
+  }
+}
+
+/**
+ * The user's stored choice for the OCR debug panel, or `null` when they have
+ * never chosen. `null` lets the caller fall back to the build-time default
+ * (see `lib/debug.ts`), so a corrupt/absent value never forces debug on.
+ */
+export function getOcrDebugChoice(): boolean | null {
+  try {
+    const raw = localStorage.getItem(OCR_DEBUG_KEY)
+    if (raw === '1') return true
+    if (raw === '0') return false
+    return null
+  } catch {
+    return null
+  }
+}
+
+export function setOcrDebugChoice(enabled: boolean): void {
+  try {
+    localStorage.setItem(OCR_DEBUG_KEY, enabled ? '1' : '0')
   } catch {
     // storage unavailable; ignore
   }
