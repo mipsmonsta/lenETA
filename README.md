@@ -17,7 +17,8 @@ GitHub Pages. No backend, no API keys.
   (free, CORS-enabled, refreshed every 30s).
 - **Circular service carousel** — swipe left/right to move between the services
   at a stop, wrapping endlessly, with the neighbouring cards tapered back. A
-  chip rail above the carousel indexes every service for direct jumps.
+  chip rail above the carousel indexes every service for direct jumps. Prefer a
+  plain vertical list? Switch **Settings → Service layout → List**.
 - **Stop info** — validates the code and shows the stop name + road from a
   bundled dataset of ~5,200 SG bus stops.
 - **Favourites** — save stops to check them quickly from the home screen.

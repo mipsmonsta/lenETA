@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   getOcrDebugChoice,
+  getServiceLayoutChoice,
   isScanGuideDone,
   markScanGuideDone,
   setOcrDebugChoice,
+  setServiceLayoutChoice,
 } from '../src/lib/storage'
 
 function stubStorage(store: Record<string, string>, throwOnSet = false) {
@@ -87,5 +89,44 @@ describe('OCR debug preference persistence', () => {
     delete (globalThis as { localStorage?: unknown }).localStorage
     expect(getOcrDebugChoice()).toBeNull()
     expect(() => setOcrDebugChoice(false)).not.toThrow()
+  })
+})
+
+describe('service layout persistence', () => {
+  it('reports no choice when nothing is stored', () => {
+    stubStorage({})
+    expect(getServiceLayoutChoice()).toBeNull()
+  })
+
+  it('reads a stored layout', () => {
+    stubStorage({ 'lenETA:serviceLayout': 'list' })
+    expect(getServiceLayoutChoice()).toBe('list')
+    stubStorage({ 'lenETA:serviceLayout': 'carousel' })
+    expect(getServiceLayoutChoice()).toBe('carousel')
+  })
+
+  it('treats an unrecognised value as no choice', () => {
+    stubStorage({ 'lenETA:serviceLayout': 'grid' })
+    expect(getServiceLayoutChoice()).toBeNull()
+    stubStorage({ 'lenETA:serviceLayout': '' })
+    expect(getServiceLayoutChoice()).toBeNull()
+  })
+
+  it('persists the layout', () => {
+    const store: Record<string, string> = {}
+    stubStorage(store)
+    setServiceLayoutChoice('list')
+    expect(store['lenETA:serviceLayout']).toBe('list')
+    setServiceLayoutChoice('carousel')
+    expect(store['lenETA:serviceLayout']).toBe('carousel')
+  })
+
+  it('degrades safely when storage is unavailable', () => {
+    stubStorage({}, true)
+    expect(() => setServiceLayoutChoice('list')).not.toThrow()
+    stubStorage({})
+    delete (globalThis as { localStorage?: unknown }).localStorage
+    expect(getServiceLayoutChoice()).toBeNull()
+    expect(() => setServiceLayoutChoice('list')).not.toThrow()
   })
 })

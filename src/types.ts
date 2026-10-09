@@ -42,3 +42,9 @@ export interface FavoriteStop {
   name: string
   road: string
 }
+
+/**
+ * How the services at a stop are presented: the swipeable circular carousel
+ * or the plain vertical list.
+ */
+export type ServiceLayout = 'carousel' | 'list'

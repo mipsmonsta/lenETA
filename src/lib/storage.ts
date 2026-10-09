@@ -1,8 +1,9 @@
-import type { FavoriteStop, Stop } from '../types'
+import type { FavoriteStop, ServiceLayout, Stop } from '../types'
 
 const KEY = 'lenETA:favorites'
 const GUIDE_KEY = 'lenETA:scanGuideDone'
 const OCR_DEBUG_KEY = 'lenETA:ocrDebug'
+const SERVICE_LAYOUT_KEY = 'lenETA:serviceLayout'
 
 export function getFavorites(): FavoriteStop[] {
   try {
@@ -82,6 +83,28 @@ export function getOcrDebugChoice(): boolean | null {
 export function setOcrDebugChoice(enabled: boolean): void {
   try {
     localStorage.setItem(OCR_DEBUG_KEY, enabled ? '1' : '0')
+  } catch {
+    // storage unavailable; ignore
+  }
+}
+
+/**
+ * The user's stored service layout, or `null` when they have never chosen.
+ * Anything unrecognised is treated as "no choice" so a corrupt value falls
+ * back to the default rather than forcing an arbitrary layout.
+ */
+export function getServiceLayoutChoice(): ServiceLayout | null {
+  try {
+    const raw = localStorage.getItem(SERVICE_LAYOUT_KEY)
+    return raw === 'carousel' || raw === 'list' ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export function setServiceLayoutChoice(layout: ServiceLayout): void {
+  try {
+    localStorage.setItem(SERVICE_LAYOUT_KEY, layout)
   } catch {
     // storage unavailable; ignore
   }

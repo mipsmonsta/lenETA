@@ -4,10 +4,11 @@ import KeypadScreen from './components/KeypadScreen'
 import ScanScreen from './components/ScanScreen'
 import SettingsScreen from './components/SettingsScreen'
 import StopResults from './components/StopResults'
-import { addFavorite, getFavorites, isFavorite, isScanGuideDone, markScanGuideDone, removeFavorite, setOcrDebugChoice } from './lib/storage'
+import { addFavorite, getFavorites, isFavorite, isScanGuideDone, markScanGuideDone, removeFavorite, setOcrDebugChoice, setServiceLayoutChoice } from './lib/storage'
 import { isOcrDebugEnabled } from './lib/debug'
+import { getServiceLayout } from './lib/layout'
 import { getStop } from './lib/stops'
-import type { FavoriteStop } from './types'
+import type { FavoriteStop, ServiceLayout } from './types'
 
 type View =
   | { name: 'home' }
@@ -22,6 +23,10 @@ export default function App() {
   const [guideDone, setGuideDone] = useState<boolean>(() => isScanGuideDone())
   // OCR diagnostics default off in production; a stored user choice wins.
   const [ocrDebug, setOcrDebug] = useState<boolean>(() => isOcrDebugEnabled())
+  // Carousel is the default presentation; the list is opt-in.
+  const [serviceLayout, setServiceLayout] = useState<ServiceLayout>(() =>
+    getServiceLayout(),
+  )
 
   // Completing the guide (or the user's first successful scan) hides the
   // first-time "how to scan" card for good.
@@ -33,6 +38,11 @@ export default function App() {
   const handleOcrDebugChange = useCallback((enabled: boolean) => {
     setOcrDebug(enabled)
     setOcrDebugChoice(enabled)
+  }, [])
+
+  const handleServiceLayoutChange = useCallback((layout: ServiceLayout) => {
+    setServiceLayout(layout)
+    setServiceLayoutChoice(layout)
   }, [])
 
   const openStop = useCallback((code: string) => {
@@ -86,6 +96,8 @@ export default function App() {
         <SettingsScreen
           ocrDebug={ocrDebug}
           onOcrDebugChange={handleOcrDebugChange}
+          serviceLayout={serviceLayout}
+          onServiceLayoutChange={handleServiceLayoutChange}
           onBack={() => setView({ name: 'home' })}
         />
       )
@@ -103,6 +115,7 @@ export default function App() {
           onBack={() => setView({ name: 'home' })}
           favorite={isFavorite(favorites, view.code)}
           onToggleFavorite={handleFavorite}
+          serviceLayout={serviceLayout}
         />
       )
   }

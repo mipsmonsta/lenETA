@@ -1,12 +1,23 @@
+import type { ServiceLayout } from '../types'
+
 export default function SettingsScreen({
   ocrDebug,
   onOcrDebugChange,
+  serviceLayout,
+  onServiceLayoutChange,
   onBack,
 }: {
   ocrDebug: boolean
   onOcrDebugChange: (enabled: boolean) => void
+  serviceLayout: ServiceLayout
+  onServiceLayoutChange: (layout: ServiceLayout) => void
   onBack: () => void
 }) {
+  const layouts: Array<{ value: ServiceLayout; label: string }> = [
+    { value: 'carousel', label: 'Carousel' },
+    { value: 'list', label: 'List' },
+  ]
+
   return (
     <div className="screen settings-screen">
       <header className="results-header">
@@ -19,7 +30,30 @@ export default function SettingsScreen({
       </header>
 
       <section className="settings-group">
-        <label className="setting-row">
+        <div className="setting-row">
+          <span className="setting-text">
+            <span className="setting-name">Service layout</span>
+            <span className="setting-desc">
+              Show the services at a stop as a swipeable circular carousel, or
+              as a plain vertical list.
+            </span>
+          </span>
+          <div className="segmented" role="group" aria-label="Service layout">
+            {layouts.map((l) => (
+              <button
+                key={l.value}
+                type="button"
+                className={`segment${serviceLayout === l.value ? ' active' : ''}`}
+                aria-pressed={serviceLayout === l.value}
+                onClick={() => onServiceLayoutChange(l.value)}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="setting-row toggle">
           <span className="setting-text">
             <span className="setting-name">OCR debug panel</span>
             <span className="setting-desc">

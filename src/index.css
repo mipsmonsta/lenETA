@@ -610,6 +610,85 @@ button {
   gap: 4px;
 }
 
+/* Service list — the compact vertical layout (Settings -> Service layout) */
+.service-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.service {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.service-headway {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+.service-no {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 72px;
+}
+
+.service-no .no {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.service-no .op {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.service-eta {
+  margin-left: auto;
+  text-align: right;
+}
+
+.service-eta .next {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.service-eta .subs {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.service-eta .subs .dim {
+  color: var(--text-dim);
+}
+
+.service-eta .load {
+  font-size: 11px;
+  color: var(--ok);
+  margin-top: 2px;
+}
+
 /* Service rail — the circular carousel's index and its accessible navigation */
 .service-rail {
   position: sticky;
@@ -944,7 +1023,38 @@ button {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 14px;
+  cursor: default;
+}
+
+/* The OCR row is a <label>, so the whole row is a hit target. */
+.setting-row.toggle {
   cursor: pointer;
+}
+
+.segmented {
+  flex: none;
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.segment {
+  padding: 8px 12px;
+  border: 0;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.segment + .segment {
+  border-left: 1px solid var(--border);
+}
+
+.segment.active {
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .setting-text {
