@@ -282,8 +282,8 @@ export default function ScanScreen({
             setVideoSize({ w: v.videoWidth, h: v.videoHeight })
           }}
         />
-        {box && <div className="guide-box" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
-        {ocrDebug && (
+        {box && !error && <div className="guide-box" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
+        {ocrDebug && !error && (
           <canvas ref={previewRef} className="ocr-preview" />
         )}
 

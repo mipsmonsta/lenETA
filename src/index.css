@@ -418,6 +418,9 @@ button {
 .camera-error {
   position: absolute;
   inset: 0;
+  /* Above every camera overlay (guide box z-2, zoom controls z-4): when the
+     camera fails this panel is the only interactive thing on screen. */
+  z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
